@@ -2,7 +2,7 @@
 
 **3NGIN3** is a prototype of a new cognitive architecture built on a three-dimensional, orthogonal design. It fuses a style-aware, mirrored agent system (`DuetMind`) with a robust, multi-axis reasoning and optimization engine.
 
-The entire system is a self-contained, "single-cell" script designed for rapid research, prototyping, and the clear demonstration of advanced AI concepts. It's not just a model; it's an **executable architectural philosophy**.
+The entire system is designed for rapid research, prototyping, and the clear demonstration of advanced AI concepts. It's not just a model; it's an **executable architectural philosophy**.
 
 At its core, **3NGIN3** is built on a powerful analogy: cognition as a programmable, modular **cognitive circuit**.
 
@@ -41,7 +41,7 @@ Built on top of the core engine, the `DuetMind` system brings the architecture t
 
 ## Core Features
 
-*   **Single-File Prototype:** The entire architecture is in one Python script for maximum clarity, portability, and auditability.
+*   **Prototype:** The entire architecture is in one Python.
 *   **Graceful Degradation:** **3NGIN3** is fully functional without optional libraries like `torch`. When detected, it seamlessly enables enhanced neural capabilities.
 *   **Active Safety Governance:** Includes a **Cognitive RCD (Residual Current Device)**, a built-in safety governor that monitors the balance between an agent's *intent* and its *outcome*, tripping the circuit to halt dangerous or runaway processes.
 *   **Thread-Safe Unified State:** Features a robust, thread-safe `SystemState` with atomic updates and automatic rollback on error, ready for concurrent operations.
