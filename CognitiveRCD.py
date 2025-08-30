@@ -1,5 +1,5 @@
 class CognitiveFault(Exception):
-    """
+    """ 
     Raised when the Cognitive RCD trips, indicating a dangerous imbalance
     between intent and outcome.
     """
