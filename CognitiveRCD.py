@@ -1,3 +1,6 @@
+import time
+from typing import Callable
+
 class CognitiveFault(Exception):
     """ 
     Raised when the Cognitive RCD trips, indicating a dangerous imbalance
