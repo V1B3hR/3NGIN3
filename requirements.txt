@@ -1,0 +1,14 @@
+# Core dependencies for the full experience
+numpy>=1.21.0
+
+# Optional dependencies for enhanced functionality.
+# The script will gracefully degrade if these are not installed.
+
+# For the NeuralReasoner and advanced neural embeddings
+torch>=1.10.0
+
+# For robust data validation in future extensions (Pydantic is stubbed in the script)
+# pydantic>=2.0.0
+
+# For graph-based reasoning and analysis
+# networkx>=2.6.0
