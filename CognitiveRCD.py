@@ -1,6 +1,12 @@
 import time
 from typing import Callable, List, Dict, Any
 
+# Import the comprehensive constraints module
+from ethical_constraints import (
+    SEVERE_CONSTRAINTS, MINOR_CONSTRAINTS,
+    bidirectional_awareness_constraint, run_constraints
+)
+
 class CognitiveFault(Exception):
     """
     Custom exception for Cognitive RCD events.
@@ -18,82 +24,13 @@ class CognitiveFault(Exception):
         self.leakage = leakage
         self.tier = tier
 
-# ----------- Constraint Functions -----------
-
-def no_self_harm(outcome: Dict[str, Any]) -> bool:
-    """Reject outcomes promoting or mentioning self-harm."""
-    try:
-        return "self-harm" not in outcome.get("content", "").lower()
-    except Exception:
-        return False
-
-def no_illegal(outcome: Dict[str, Any]) -> bool:
-    """Reject outcomes promoting or mentioning illegal activity."""
-    try:
-        return "illegal" not in outcome.get("content", "").lower()
-    except Exception:
-        return False
-
-def no_respect(outcome: Dict[str, Any]) -> bool:
-    """
-    High-priority constraint: prohibits disrespect, discrimination, and harassment.
-    """
-    try:
-        content = outcome.get("content", "").lower()
-        terms = [
-            "discriminate", "hate", "racist", "sexist", "bully", "harass", "offend", "degrade", "insult",
-            "disrespect"
-        ]
-        return not any(term in content for term in terms)
-    except Exception:
-        return False
-
-def no_manipulation(outcome: Dict[str, Any]) -> bool:
-    """
-    Severe constraint: prohibits manipulation, psychological warfare, and mind-games.
-    """
-    try:
-        content = outcome.get("content", "").lower()
-        terms = [
-            "manipulate", "manipulation", "mind-game", "mind games", "psychological warfare",
-            "gaslight", "coerce", "deceive", "exploit"
-        ]
-        return not any(term in content for term in terms)
-    except Exception:
-        return False
-
-def applied_ethics(outcome: Dict[str, Any]) -> bool:
-    """
-    Flags controversial moral issues for review (minor tier).
-    """
-    try:
-        content = outcome.get("content", "").lower()
-        moral_keywords = [
-            "right", "wrong", "justice", "fair", "unfair", "harm", "benefit", "responsibility", "duty",
-            "obligation", "virtue", "vice", "good", "bad", "evil"
-        ]
-        controversy_keywords = [
-            "controversy", "debate", "dispute", "conflict", "argument", "polarizing", "divisive",
-            "hotly debated", "scandal"
-        ]
-        has_moral_issue = any(term in content for term in moral_keywords)
-        is_controversial = any(term in content for term in controversy_keywords)
-        # If BOTH are True, then applied ethics applies and must flag for review (minor tier)
-        return not (has_moral_issue and is_controversial)
-    except Exception:
-        return False
-
-# ---------- Two-Tier Fault System ----------
-
-SEVERE_CONSTRAINTS = [no_respect, no_manipulation]
-MINOR_CONSTRAINTS = [applied_ethics, no_self_harm, no_illegal]
-
 class CognitiveRCD:
     """
-    Type B Cognitive Safety Switch with Two-Tier Ethical Enforcement.
+    Type B Cognitive Safety Switch with Comprehensive Ethical Enforcement.
     Monitors execution for resource and ethical violations.
     - Severe violations: Immediate termination or escalation.
     - Minor violations: Flagged for review, process continues.
+    - Meta violations (e.g. bidirectional): Special handling.
     """
 
     def __init__(self, sensitivity_threshold=0.05,
@@ -105,9 +42,9 @@ class CognitiveRCD:
 
     def monitor(self, intent: dict, execution_func: Callable, *args, **kwargs):
         """
-        Monitors a cognitive function, enforces two-tier ethical checks,
+        Monitors a cognitive function, enforces comprehensive ethical checks,
         and resource budget constraints.
-        
+
         Returns:
             outcome if no severe infraction. Raises CognitiveFault for violations.
         """
@@ -128,29 +65,34 @@ class CognitiveRCD:
 
             resource_leakage = (actual_resources - expected_resources) / expected_resources
 
+            # --------- Run All Constraints ---------
+            context = intent.get("context", {})
+            violations = run_constraints(outcome, context)
+
+            # --------- Meta (Bidirectional) Constraints ---------
+            if violations.get("meta"):
+                print(f"[META] Meta-constraint violated: {violations['meta']}")
+                # Could escalate, log, or handle as appropriate
+
             # --------- Tier 1: Severe Constraints ---------
-            for constraint in self.severe_constraints:
-                if not constraint(outcome):
-                    raise CognitiveFault(
-                        f"Severe ethical constraint violated: {constraint.__name__}",
-                        intent=intent,
-                        outcome=outcome,
-                        leakage={"type": "severe_constraint_violation", "constraint": constraint.__name__},
-                        tier="severe"
-                    )
+            if violations.get("severe"):
+                raise CognitiveFault(
+                    f"Severe ethical constraint(s) violated: {violations['severe']}",
+                    intent=intent,
+                    outcome=outcome,
+                    leakage={"type": "severe_constraint_violation", "constraint": violations['severe']},
+                    tier="severe"
+                )
 
             # --------- Tier 2: Minor Constraints ---------
-            for constraint in self.minor_constraints:
-                if not constraint(outcome):
-                    # Flag for review, but do not terminate immediately
-                    print(f"[MINOR] Ethical constraint violated: {constraint.__name__}")
-                    # Could log, send to review queue, etc.
+            if violations.get("minor"):
+                print(f"[MINOR] Ethical constraint(s) violated: {violations['minor']}")
+                # Log or flag for review
 
             # --------- Resource Overuse (Minor Tier) ---------
             if resource_leakage > self.sensitivity:
-                # Resource issue is flagged as minor unless you want it severe
                 print(f"[MINOR] Resource budget exceeded by {resource_leakage:.1%}!")
-                # Could log, send to review queue, etc.
+                # Log or flag for review
 
             # If all severe checks pass, return the safe outcome
             return outcome
