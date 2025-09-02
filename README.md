@@ -56,6 +56,95 @@ Built on top of the core engine, the `DuetMind` system brings the architecture t
 *   **Active Safety Governance:** Includes a **Cognitive RCD (Residual Current Device)**, a built-in safety governor that monitors the balance between an agent's *intent* and its *outcome*, tripping t[...]
 *   **Thread-Safe Unified State:** Features a robust, thread-safe `SystemState` with atomic updates and automatic rollback on error, ready for concurrent operations.
 
+# 3NGIN3 Cognitive Safety & Ethics Framework
+
+This repository implements a comprehensive, multi-layered ethical enforcement and cognitive safety system for AI applications, based on 25 universal, human-centric rules.  
+It provides robust, scalable protection for both operational safety and ethical integrity.
+
+---
+
+## Key Components
+
+### `ethical_constraints.py`
+- Implements **25 core ethical laws** as Python constraint functions.
+- Laws are grouped into `SEVERE_CONSTRAINTS` and `MINOR_CONSTRAINTS` for prioritized enforcement.
+- Includes a **bidirectional awareness meta-constraint** for future AI self-protection.
+- Exported API: `run_constraints(outcome, context)` for seamless integration.
+
+### `CognitiveRCD.py`
+- Monitors AI execution and enforces ethical and resource constraints.
+- Uses all laws from `ethical_constraints.py` to check outcomes for violations.
+- Handles severe, minor, and meta (bidirectional) constraint tiers.
+- Can be wrapped around any function producing an AI "outcome" (e.g., text, action, decision).
+
+### `docs/ethical_constraints.md`
+- Human-readable documentation of all 25 ethical laws and their purpose.
+- Philosophy and practical guidance for developers and users.
+
+---
+
+## Integration Guide
+
+This module is designed to be **standalone and ready for integration with any AI system**.  
+Simply import `CognitiveRCD` and `run_constraints` in your project and route all AI-generated outcomes through the monitor logic.
+
+**Example Usage:**
+```python
+from CognitiveRCD import CognitiveRCD
+
+rcd = CognitiveRCD()
+intent = {
+    "resource_budget": 1.0,
+    "context": {"ai_awareness": False}  # Set True if AI is conscious
+}
+
+def ai_action(*args, **kwargs):
+    # ... AI generates output here ...
+    return {"content": "This is my output."}
+
+try:
+    safe_outcome = rcd.monitor(intent, ai_action)
+except Exception as e:
+    print("Constraint violation or error:", e)
+```
+
+---
+
+## Can This Module Be Used Standalone?
+**Yes!**
+- All logic is modular and does not depend on any specific AI framework.
+- Can be imported and used in any Python-based AI agent, chatbot, or model pipeline.
+- Future modules or extensions (e.g. new types of AI, additional constraints) only need to use the core API.
+
+**To integrate:**
+- Connect your AI output/decision logic to the `CognitiveRCD.monitor()` function.
+- Provide intent, outcome, and resource context.
+- Handle exceptions and flagged outcomes as needed in your application.
+
+---
+
+## Updating & Extending
+
+- Add new laws or adjust severity by editing `ethical_constraints.py`.
+- Update documentation in `docs/ethical_constraints.md`.
+- All changes propagate automatically across modules using the core enforcement logic.
+
+---
+
+## Documentation
+
+See [`docs/ethical_constraints.md`](docs/ethical_constraints.md) for a detailed explanation of each ethical rule and its enforcement.
+
+---
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+**For questions, enhancements, or integration support, open an issue or pull request!**
+
 ## Getting Started
 
 ### Prerequisites
