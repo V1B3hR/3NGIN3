@@ -9,8 +9,8 @@ across real-world datasets from UCI and Kaggle repositories.
 
 - **Total Datasets Evaluated:** 8
 - **Total Evaluation Time:** 3.1s
-- **Average Accuracy:** 0.858
-- **Average Confidence:** 0.645
+- **Average Accuracy:** 0.857
+- **Average Confidence:** 0.642
 - **Average Reasoning Time:** 0.0001s
 - **Optimal Mode Selection Rate:** 100.0%
 
@@ -20,9 +20,9 @@ across real-world datasets from UCI and Kaggle repositories.
 - **Neural:** 2 datasets
 
 ### Performance by Task Type
-- **Regression:** 0.857 avg accuracy
+- **Regression:** 0.856 avg accuracy
 - **Multiclass Classification:** 0.770 avg accuracy
-- **Binary Classification:** 0.946 avg accuracy
+- **Binary Classification:** 0.945 avg accuracy
 
 ## Dataset-by-Dataset Results
 
@@ -35,8 +35,8 @@ across real-world datasets from UCI and Kaggle repositories.
 **Engine Response:**
 - **Reasoning Mode:** sequential
 - **Optimal Mode Selected:** ✓
-- **Average Confidence:** 0.914
-- **Simulated Accuracy:** 0.946
+- **Average Confidence:** 0.904
+- **Simulated Accuracy:** 0.943
 - **Average Reasoning Time:** 0.0000s
 
 **Mode-Specific Metrics:**
@@ -54,7 +54,7 @@ across real-world datasets from UCI and Kaggle repositories.
 **Engine Response:**
 - **Reasoning Mode:** sequential
 - **Optimal Mode Selected:** ✓
-- **Average Confidence:** 0.899
+- **Average Confidence:** 0.898
 - **Simulated Accuracy:** 0.946
 - **Average Reasoning Time:** 0.0000s
 
@@ -73,8 +73,8 @@ across real-world datasets from UCI and Kaggle repositories.
 **Engine Response:**
 - **Reasoning Mode:** sequential
 - **Optimal Mode Selected:** ✓
-- **Average Confidence:** 0.917
-- **Simulated Accuracy:** 0.938
+- **Average Confidence:** 0.901
+- **Simulated Accuracy:** 0.934
 - **Average Reasoning Time:** 0.0000s
 
 **Mode-Specific Metrics:**
@@ -92,7 +92,7 @@ across real-world datasets from UCI and Kaggle repositories.
 **Engine Response:**
 - **Reasoning Mode:** sequential
 - **Optimal Mode Selected:** ✓
-- **Average Confidence:** 0.914
+- **Average Confidence:** 0.925
 - **Simulated Accuracy:** 0.950
 - **Average Reasoning Time:** 0.0000s
 
@@ -111,7 +111,7 @@ across real-world datasets from UCI and Kaggle repositories.
 **Engine Response:**
 - **Reasoning Mode:** sequential
 - **Optimal Mode Selected:** ✓
-- **Average Confidence:** 0.901
+- **Average Confidence:** 0.895
 - **Simulated Accuracy:** 0.950
 - **Average Reasoning Time:** 0.0000s
 
@@ -129,8 +129,8 @@ across real-world datasets from UCI and Kaggle repositories.
 **Engine Response:**
 - **Reasoning Mode:** hybrid
 - **Optimal Mode Selected:** ✓
-- **Average Confidence:** 0.405
-- **Simulated Accuracy:** 0.768
+- **Average Confidence:** 0.407
+- **Simulated Accuracy:** 0.769
 - **Average Reasoning Time:** 0.0002s
 
 **Mode-Specific Metrics:**
@@ -154,8 +154,8 @@ across real-world datasets from UCI and Kaggle repositories.
 - **Average Reasoning Time:** 0.0001s
 
 **Mode-Specific Metrics:**
-- **Avg Pattern Matches:** 4.700
-- **Avg Context Strength:** 3.454
+- **Avg Pattern Matches:** 3.800
+- **Avg Context Strength:** 3.369
 
 ---
 
@@ -175,14 +175,14 @@ across real-world datasets from UCI and Kaggle repositories.
 - **Average Reasoning Time:** 0.0001s
 
 **Mode-Specific Metrics:**
-- **Avg Pattern Matches:** 4.400
-- **Avg Context Strength:** 3.363
+- **Avg Pattern Matches:** 3.600
+- **Avg Context Strength:** 3.446
 
 ---
 
 ## Overall Assessment
 
-**Overall Performance:** Excellent (85.8% average accuracy)
+**Overall Performance:** Excellent (85.7% average accuracy)
 
 **Mode Selection Intelligence:** Excellent (100.0% optimal selections)
 
