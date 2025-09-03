@@ -3,7 +3,7 @@ import random
 import shutil
 
 # CONFIGURATION
-DATA_DIR = "./Data"
+DATA_DIR = "./data"
 TRAIN_DIR = os.path.join(DATA_DIR, "train")
 VAL_DIR = os.path.join(DATA_DIR, "val")
 VAL_SPLIT = 0.2  # 20% for validation
@@ -37,7 +37,7 @@ def main():
                if os.path.isdir(os.path.join(DATA_DIR, d)) and d not in ["train", "val"]]
     for class_name in classes:
         split_class(class_name)
-    print("Splitting complete. Check the 'train' and 'val' folders inside Data.")
+    print("Splitting complete. Check the 'train' and 'val' folders inside data.")
 
 if __name__ == "__main__":
     main()
