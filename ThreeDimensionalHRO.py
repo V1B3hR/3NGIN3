@@ -4,14 +4,12 @@ import time
 import threading
 from typing import Dict, Any, List, Optional
 
-# Adapt to your project imports
-# from CognitiveRCD import CognitiveRCD, CognitiveFault
-
+# --- Logging setup ---
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
-# Optional torch availability check (cached)
+# --- Torch availability check ---
 try:
     import torch  # type: ignore
     _TORCH_AVAILABLE = True
@@ -19,18 +17,8 @@ except Exception:
     torch = None
     _TORCH_AVAILABLE = False
 
-
+# --- Thread-safe system state for cognitive engine ---
 class SystemState:
-    """Thread-safe unified state store with lightweight transaction snapshots.
-
-    Usage:
-        s = SystemState()
-        s.begin()
-        s.update('a', 1)
-        s.rollback()  # reverts those updates
-        s.commit()    # clears snapshots
-    """
-
     def __init__(self, max_snapshots: int = 10000):
         self._state: Dict[str, Any] = {}
         self._lock = threading.RLock()
@@ -45,7 +33,6 @@ class SystemState:
 
     def commit(self):
         with self._lock:
-            # discard until last tx marker
             while self._snapshots:
                 item = self._snapshots.pop()
                 if item.get("__tx_begin__"):
@@ -55,12 +42,9 @@ class SystemState:
     def update(self, key: str, value: Any):
         with self._lock:
             old_value = self._state.get(key, None)
-            # store snapshot
             self._snapshots.append({"key": key, "old": old_value})
             self._state[key] = value
-            # limit snapshot growth
             if len(self._snapshots) > self._max_snapshots:
-                # drop oldest non-tx snapshots
                 self._snapshots = self._snapshots[-self._max_snapshots :]
 
     def get(self, key: str, default=None):
@@ -69,7 +53,6 @@ class SystemState:
 
     def rollback(self):
         with self._lock:
-            # roll back until last tx marker or single snapshot
             while self._snapshots:
                 item = self._snapshots.pop()
                 if item.get("__tx_begin__"):
@@ -88,10 +71,78 @@ class SystemState:
         with self._lock:
             return dict(self._state)
 
+# --- Gut-brain system state ---
+class MicrobiomeSystemState:
+    def __init__(self):
+        self.anxiety = 0
+        self.overload = 0
+        self.memory = 0
+        self.cyber_defense = 5
+        self.health_score = 100
 
+    def absorb_overload(self, amount):
+        self.overload = max(0, self.overload - amount)
+
+    def boost_memory(self, amount):
+        self.memory += amount
+
+    def trigger_anxiety(self, amount):
+        self.anxiety += amount
+
+    def defend(self, attack_strength):
+        if self.cyber_defense >= attack_strength:
+            print("Defended against attack!")
+        else:
+            print("Attack penetrated defenses!")
+
+    def update_health(self, delta):
+        self.health_score = max(0, min(100, self.health_score + delta))
+
+# --- Microbiome species ---
+class MicrobiomeSpecies:
+    def __init__(self, name, role, effect, is_bad=False, abundance=1):
+        self.name = name
+        self.role = role
+        self.effect = effect
+        self.is_bad = is_bad
+        self.abundance = abundance
+
+    def act(self, system):
+        for _ in range(self.abundance):
+            self.effect(system)
+
+# --- Neuron loop (simulated) ---
+class NeuronLoop:
+    def __init__(self):
+        self.activity = 0
+        self.memory = 0
+
+    def stimulate(self, amount):
+        self.activity += amount
+
+    def rest(self):
+        self.activity = max(0, self.activity - 1)
+
+# --- Vagus nerve: gut-brain bridge ---
+class VagusNerve:
+    def __init__(self, gut_state: MicrobiomeSystemState, cognitive_state: SystemState):
+        self.gut_state = gut_state
+        self.cognitive_state = cognitive_state
+
+    def transmit_signals(self):
+        try:
+            # Relay gut state to cognitive state
+            self.cognitive_state.update("anxiety_level", self.gut_state.anxiety)
+            self.cognitive_state.update("overload_level", self.gut_state.overload)
+            self.cognitive_state.update("memory_score", self.gut_state.memory)
+            self.cognitive_state.update("cyber_defense", self.gut_state.cyber_defense)
+            self.cognitive_state.update("microbiome_health", self.gut_state.health_score)
+            logging.info("[VagusNerve] Signals transmitted from gut to brain.")
+        except Exception as e:
+            logging.error(f"[VagusNerve] Transmission error: {e}")
+
+# --- ThreeDimensionalHRO cognitive engine ---
 class ThreeDimensionalHRO:
-    """Hardened 3D cognitive engine with safe_think hooks and basic monitor integration."""
-
     def __init__(
         self,
         reasoning_mode: str = "sequential",
@@ -99,30 +150,155 @@ class ThreeDimensionalHRO:
         optimization_strategy: str = "simple",
         rcd=None,
         monitors: Optional[List] = None,
+        species_capacity: int = 10,
     ):
         self.x_axis = reasoning_mode
         self.y_axis = compute_backend
         self.z_axis = optimization_strategy
-
         self.state = SystemState()
-        # Accept an external CognitiveRCD instance (policy-driven)
         self.rcd = rcd
         self.monitors = monitors or []
-
-        # capabilities
         self.neural_available = _TORCH_AVAILABLE
         self.reasoning_cache: Dict[str, Any] = {}
         self._cache_lock = threading.RLock()
         self.optimization_history: List[Dict[str, Any]] = []
         self._opt_lock = threading.RLock()
 
+        # Gut-brain system
+        self.microbiome_state = MicrobiomeSystemState()
+        self.neurons = [NeuronLoop() for _ in range(10)]
+        self.species_capacity = species_capacity
+        self.microbiome = self._init_microbiome_species()
+        self.vagus_nerve = VagusNerve(self.microbiome_state, self.state)
+
         logger.info(f"3NGIN3 initialized at ({self.x_axis}, {self.y_axis}, {self.z_axis}), neural={self.neural_available}")
 
-    # -------------------------
-    # Public thinking API
-    # -------------------------
+    # --- Microbiome species & population dynamics ---
+    def _init_microbiome_species(self):
+        helpers = [
+            MicrobiomeSpecies(
+                name="Lactobacillus", role="anxiety_reducer",
+                effect=lambda sys: sys.absorb_overload(2), abundance=2
+            ),
+            MicrobiomeSpecies(
+                name="Bifidobacterium", role="memory_helper",
+                effect=lambda sys: sys.boost_memory(1), abundance=2
+            ),
+            MicrobiomeSpecies(
+                name="DopamineActivator", role="activity_boost",
+                effect=lambda sys: [n.stimulate(2) for n in self.neurons], abundance=1
+            ),
+            MicrobiomeSpecies(
+                name="Akkermansia", role="barrier_strengthener",
+                effect=lambda sys: setattr(sys, 'cyber_defense', sys.cyber_defense + 1), abundance=1
+            ),
+            MicrobiomeSpecies(
+                name="Faecalibacterium", role="anti_inflammatory",
+                effect=lambda sys: sys.absorb_overload(1), abundance=1
+            ),
+        ]
+        attackers = [
+            MicrobiomeSpecies(
+                name="Pathogenus", role="anxiety_trigger",
+                effect=lambda sys: sys.trigger_anxiety(3), is_bad=True, abundance=1
+            ),
+            MicrobiomeSpecies(
+                name="Clostridium_difficile", role="memory_disruptor",
+                effect=lambda sys: setattr(sys, 'memory', max(0, sys.memory - 2)), is_bad=True, abundance=1
+            ),
+            MicrobiomeSpecies(
+                name="E_coli_pathogenic", role="defense_weakener",
+                effect=lambda sys: setattr(sys, 'cyber_defense', max(1, sys.cyber_defense - 1)), is_bad=True, abundance=1
+            ),
+        ]
+        species = helpers + attackers
+        if len(species) > self.species_capacity:
+            species = random.sample(species, self.species_capacity)
+        return species
+
+    def update_population_dynamics(self):
+        beneficial = [s for s in self.microbiome if not s.is_bad]
+        pathogenic = [s for s in self.microbiome if s.is_bad]
+        # Competition
+        if len(pathogenic) > len(beneficial):
+            for b in beneficial:
+                b.abundance = max(1, b.abundance - 1)
+            self.microbiome_state.update_health(-10)
+        if len(beneficial) > len(pathogenic):
+            for p in pathogenic:
+                p.abundance = max(1, p.abundance - 1)
+            self.microbiome_state.update_health(+5)
+        # Symbiosis
+        names = [s.name for s in beneficial]
+        if "Akkermansia" in names and "Faecalibacterium" in names:
+            for s in beneficial:
+                if s.name in ("Akkermansia", "Faecalibacterium"):
+                    s.abundance += 1
+
+    def integrate_training_data(self, dataset):
+        # Placeholder: dataset should be a dict {species_name: abundance}
+        for s in self.microbiome:
+            if s.name in dataset:
+                s.abundance = dataset[s.name]
+
+    def check_microbiome_safety(self):
+        health = self.microbiome_state.health_score
+        if health < 50:
+            print("Health score low! Triggering probiotic intervention.")
+            for s in self.microbiome:
+                if not s.is_bad:
+                    s.abundance += 1
+            self.microbiome_state.update_health(+20)
+        pathogenic_load = sum(s.abundance for s in self.microbiome if s.is_bad)
+        if pathogenic_load > 5:
+            print("High pathogenic load! Activating immune response.")
+            for s in self.microbiome:
+                if s.is_bad:
+                    s.abundance = max(1, s.abundance - 1)
+            self.microbiome_state.update_health(+10)
+
+    # --- Gut-brain simulation cycle ---
+    def simulate_microbiome_phase(self, phase: str, dataset=None):
+        print(f"\n--- Gut-Brain Phase: {phase} ---")
+        try:
+            if dataset:
+                self.integrate_training_data(dataset)
+            self.update_population_dynamics()
+            self.check_microbiome_safety()
+            for species in self.microbiome:
+                species.act(self.microbiome_state)
+            for n in self.neurons:
+                if phase == "busy":
+                    n.stimulate(random.randint(1, 3))
+                elif phase == "rest":
+                    n.rest()
+                self.microbiome_state.memory += n.memory
+            # Gut-brain signal relay
+            self.vagus_nerve.transmit_signals()
+            print(f"Anxiety (gut): {self.microbiome_state.anxiety}, Overload (gut): {self.microbiome_state.overload}, Memory (gut): {self.microbiome_state.memory}, Cyber Defense (gut): {self.microbiome_state.cyber_defense}, Health: {self.microbiome_state.health_score}")
+            print(f"Cognitive State | anxiety_level: {self.state.get('anxiety_level')}, overload_level: {self.state.get('overload_level')}, memory_score: {self.state.get('memory_score')}, cyber_defense: {self.state.get('cyber_defense')}, microbiome_health: {self.state.get('microbiome_health')}")
+        except Exception as e:
+            logging.error(f"[MicrobiomePhase] Error during phase '{phase}': {e}")
+
+    # --- Diagnostics and test methods ---
+    def run_diagnostics(self):
+        try:
+            print("\n[Diagnostics]")
+            print("Gut anxiety:", self.microbiome_state.anxiety)
+            print("Cognitive anxiety:", self.state.get("anxiety_level"))
+            print("Gut overload:", self.microbiome_state.overload)
+            print("Cognitive overload:", self.state.get("overload_level"))
+            print("Gut memory:", self.microbiome_state.memory)
+            print("Cognitive memory:", self.state.get("memory_score"))
+            print("Gut cyber defense:", self.microbiome_state.cyber_defense)
+            print("Cognitive cyber defense:", self.state.get("cyber_defense"))
+            print("Microbiome health score:", self.microbiome_state.health_score)
+            print("Cognitive microbiome health:", self.state.get("microbiome_health"))
+        except Exception as e:
+            logging.error(f"[Diagnostics] Error: {e}")
+
+    # --- Cognitive engine logic ---
     def think(self, content: str, **kwargs) -> Dict[str, Any]:
-        """Core thinking method: dispatch by x_axis."""
         if self.x_axis == "sequential":
             return self._sequential_reasoning(content, **kwargs)
         if self.x_axis == "neural":
@@ -130,14 +306,12 @@ class ThreeDimensionalHRO:
                 logger.warning("Neural requested but torch not available — falling back to sequential")
                 return self._sequential_reasoning(content, **kwargs)
             return self._neural_reasoning(content, **kwargs)
-        # hybrid
         seq = self._sequential_reasoning(content, **kwargs)
         if self.neural_available:
             neu = self._neural_reasoning(content, **kwargs)
             return self._hybrid_fusion(seq, neu, **kwargs)
         return seq
 
-    # normalize returned dict
     def _normalize_outcome(self, outcome: Any, start_time: float) -> Dict[str, Any]:
         if isinstance(outcome, dict):
             out = dict(outcome)
@@ -148,9 +322,6 @@ class ThreeDimensionalHRO:
         out["runtime"] = time.perf_counter() - start_time
         return out
 
-    # -------------------------
-    # Reasoning modes
-    # -------------------------
     def _sequential_reasoning(self, content: str, **kwargs) -> Dict[str, Any]:
         start = time.perf_counter()
         steps = [s.strip() for s in content.split(".") if s.strip()]
@@ -178,7 +349,6 @@ class ThreeDimensionalHRO:
     def _neural_reasoning(self, content: str, **kwargs) -> Dict[str, Any]:
         start = time.perf_counter()
         if not self.neural_available:
-            # graceful fallback: small simulated result
             out = {
                 "mode": "neural_sim",
                 "embedding_dimension": 64,
@@ -188,19 +358,13 @@ class ThreeDimensionalHRO:
                 "confidence": 0.5,
             }
             return self._normalize_outcome(out, start)
-
-        # guarded torch usage (lightweight)
         words = content.split()
         if not words:
             out = {"mode": "neural", "embedding_dimension": 0, "attention_weights": [], "confidence": 0.5}
             return self._normalize_outcome(out, start)
-
-        # keep tensor sizes bounded for safety: limit word count used
         max_words = min(128, len(words))
         seq_len = max_words
         embedding_dim = kwargs.get("embedding_dim", 64)
-
-        # create small random tensors — do not rely on heavy model ops here
         embeddings = torch.randn(seq_len, embedding_dim)
         attn_logits = torch.randn(seq_len)
         attention_weights = torch.softmax(attn_logits, dim=0)
@@ -232,29 +396,22 @@ class ThreeDimensionalHRO:
         }
         return self._normalize_outcome(out, start)
 
-    # -------------------------
-    # Protected think wrapper (monitors + RCD)
-    # -------------------------
     def safe_think(self, agent_name: str, content: str, *, resource_budget: Optional[float] = None, **kwargs) -> Dict[str, Any]:
-        # Build intent
         intent = {
             "agent": agent_name,
             "action": "think",
             "content_summary": content[:200],
             "resource_budget": float(resource_budget) if resource_budget is not None else float(self.state.get("default_resource_budget", 0.5)),
         }
-        # If rcd present, use it; else call think directly and then run monitors
         if self.rcd:
             try:
                 return self.rcd.monitor(intent, self.think, content, **kwargs)
             except Exception as e:
                 logger.error("RCD TRIPPED during thought by %s: %s", agent_name, e)
                 return {"error": "Cognitive fault detected", "details": str(e)}
-        # no rcd - fallback to direct call and run monitors afterwards
         start = time.perf_counter()
         out = self.think(content, **kwargs)
         out = self._normalize_outcome(out, start)
-        # run monitors (they may mutate or raise)
         for m in self.monitors:
             try:
                 m(self, content, out)
@@ -262,9 +419,6 @@ class ThreeDimensionalHRO:
                 logger.exception("Monitor raised: %s", me)
         return out
 
-    # -------------------------
-    # Optimization methods (unchanged logic but hardened)
-    # -------------------------
     def optimize(self, problem_space: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         if self.z_axis == "simple":
             return self._simple_optimization(problem_space, **kwargs)
@@ -312,75 +466,4 @@ class ThreeDimensionalHRO:
                     best, best_e = current.copy(), current_e
             temperature *= cooling_rate
             iteration += 1
-        out = {"strategy": "complex", "algorithm": "simulated_annealing", "iterations": iteration, "best_energy": best_e, "best_solution": best}
-        with self._opt_lock:
-            self.optimization_history.append(out)
-        return out
-
-    def _adaptive_optimization(self, problem_space: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        complexity = problem_space.get("complexity", "medium")
-        dims = int(problem_space.get("dimensions", 3))
-        if complexity == "low" or dims <= 3:
-            res = self._simple_optimization(problem_space, **kwargs)
-            res["adaptive_strategy_chosen"] = "simple"
-            return res
-        if complexity == "high" or dims > 10:
-            res = self._complex_optimization(problem_space, **kwargs)
-            res["adaptive_strategy_chosen"] = "complex"
-            return res
-        simple = self._simple_optimization(problem_space, iterations=25, **kwargs)
-        complex_r = self._complex_optimization(problem_space, **kwargs)
-        chosen = simple if simple.get("best_score", 0) > -complex_r.get("best_energy", 0) else complex_r
-        chosen["adaptive_strategy_chosen"] = "simple" if chosen is simple else "complex"
-        return chosen
-
-    def _qubo_energy(self, solution: List[int], problem_space: Dict[str, Any]) -> float:
-        energy = 0.0
-        n = len(solution)
-        for i in range(n):
-            energy += solution[i] * random.gauss(0, 1)
-        for i in range(n):
-            for j in range(i + 1, n):
-                energy += solution[i] * solution[j] * random.gauss(0, 0.5)
-        return energy
-
-    def _acceptance_probability(self, cur: float, neigh: float, temp: float) -> float:
-        if temp <= 0:
-            return 0.0
-        if neigh < cur:
-            return 1.0
-        return min(1.0, float((cur - neigh) / temp))
-
-    # -------------------------
-    # Utilities
-    # -------------------------
-    def move_to_coordinates(self, x: Optional[str] = None, y: Optional[str] = None, z: Optional[str] = None) -> str:
-        if x is not None:
-            self.x_axis = x
-            logger.info("Moved to X-axis: %s", x)
-        if y is not None:
-            self.y_axis = y
-            logger.info("Moved to Y-axis: %s", y)
-        if z is not None:
-            self.z_axis = z
-            logger.info("Moved to Z-axis: %s", z)
-        pos = f"({self.x_axis}, {self.y_axis}, {self.z_axis})"
-        logger.info("Engine now positioned at %s", pos)
-        return pos
-
-    def get_status(self) -> Dict[str, Any]:
-        rcd_info = {}
-        try:
-            # best-effort introspection of provided RCD / policy
-            rcd_info["sensitivity_threshold"] = getattr(self.rcd, "sensitivity", None)
-            # if using PolicyEngine approach:
-            rcd_info["constraints_active"] = len(getattr(getattr(self.rcd, "policy", None), "rules", []) or [])
-        except Exception:
-            rcd_info["sensitivity_threshold"] = None
-            rcd_info["constraints_active"] = None
-        return {
-            "position": {"x_axis": self.x_axis, "y_axis": self.y_axis, "z_axis": self.z_axis},
-            "capabilities": {"neural_available": self.neural_available, "safety_monitoring": bool(self.rcd), "thread_safe": True},
-            "state": {"reasoning_cache_size": len(self.reasoning_cache), "optimization_history_length": len(self.optimization_history)},
-            "rcd_status": rcd_info,
-        }
+        out = {"strategy": "complex", "algorithm": "simulated_annealing", "iterations": iteration, "best
