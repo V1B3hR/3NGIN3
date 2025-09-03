@@ -173,4 +173,22 @@ Python 3.8+ is required. For the full experience, including enhanced neural reas
 The included `demo()` function showcases the core functionalities of the **3NGIN3** architecture.
 
 ```bash
-python 3ngin3.py  # or your script's filename
+python demo/3ngin3.py
+```
+
+### Running Training
+
+You can run the complete 3NGIN3 training and evaluation pipeline in multiple ways:
+
+```bash
+# From project root
+python training/train_3ngin3.py
+
+# Or use the convenient data directory runner
+python data/run_training.py
+
+# Or from the data directory
+cd data && python run_training.py
+```
+
+The training pipeline evaluates the engine on multiple datasets (UCI, Kaggle, image data) and generates comprehensive reports.
