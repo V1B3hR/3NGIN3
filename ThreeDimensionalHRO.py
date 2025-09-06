@@ -2,7 +2,7 @@ import logging
 import random
 import time
 import threading
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 
 # --- Logging setup ---
 logger = logging.getLogger(__name__)
@@ -16,6 +16,73 @@ try:
 except Exception:
     torch = None
     _TORCH_AVAILABLE = False
+
+# --- Registry system for cognitive components ---
+image_encoders = {}
+cognitive_engines = {}
+microbiome_species_registry = {}
+
+def register_image_encoder(fn: Callable) -> Callable:
+    """Register an image encoder function."""
+    module_name_split = fn.__module__.split('.')
+    model_name = module_name_split[-1]
+    image_encoders[model_name] = fn
+    return fn
+
+def register_cognitive_engine(name: str = None):
+    """Register a cognitive engine class or function."""
+    def decorator(cls_or_fn: Callable) -> Callable:
+        engine_name = name or cls_or_fn.__name__.lower()
+        cognitive_engines[engine_name] = cls_or_fn
+        return cls_or_fn
+    return decorator
+
+def register_microbiome_species(species_class: Callable) -> Callable:
+    """Register a microbiome species class."""
+    species_name = species_class.__name__.lower()
+    microbiome_species_registry[species_name] = species_class
+    return species_class
+
+def get_image_encoder(model_name: str) -> Callable:
+    """Retrieve registered image encoder."""
+    if model_name not in image_encoders:
+        raise ValueError(f'Unknown image encoder: {model_name}')
+    return image_encoders[model_name]
+
+def get_cognitive_engine(engine_name: str) -> Callable:
+    """Retrieve registered cognitive engine."""
+    if engine_name not in cognitive_engines:
+        raise ValueError(f'Unknown cognitive engine: {engine_name}')
+    return cognitive_engines[engine_name]
+
+def get_microbiome_species(species_name: str) -> Callable:
+    """Retrieve registered microbiome species."""
+    if species_name not in microbiome_species_registry:
+        raise ValueError(f'Unknown microbiome species: {species_name}')
+    return microbiome_species_registry[species_name]
+
+def is_image_encoder(model_name: str) -> bool:
+    """Check if model is registered as image encoder."""
+    return model_name in image_encoders
+
+def is_cognitive_engine(engine_name: str) -> bool:
+    """Check if engine is registered as cognitive engine."""
+    return engine_name in cognitive_engines
+
+def build_image_encoder(config_encoder: Dict[str, Any], verbose: bool = False, **kwargs) -> Any:
+    """Build image encoder from configuration."""
+    model_name = config_encoder['NAME']
+    if model_name.startswith('cls_'):
+        model_name = model_name[4:]
+    if not is_image_encoder(model_name):
+        raise ValueError(f'Unknown model: {model_name}')
+    return image_encoders[model_name](config_encoder, verbose, **kwargs)
+
+def build_cognitive_engine(engine_name: str, **kwargs) -> Any:
+    """Build cognitive engine from registry."""
+    if not is_cognitive_engine(engine_name):
+        raise ValueError(f'Unknown cognitive engine: {engine_name}')
+    return cognitive_engines[engine_name](**kwargs)
 
 # --- Thread-safe system state for cognitive engine ---
 class SystemState:
@@ -98,7 +165,7 @@ class MicrobiomeSystemState:
     def update_health(self, delta):
         self.health_score = max(0, min(100, self.health_score + delta))
 
-# --- Microbiome species ---
+# --- Base microbiome species class ---
 class MicrobiomeSpecies:
     def __init__(self, name, role, effect, is_bad=False, abundance=1):
         self.name = name
@@ -110,6 +177,38 @@ class MicrobiomeSpecies:
     def act(self, system):
         for _ in range(self.abundance):
             self.effect(system)
+
+# --- Registered microbiome species ---
+@register_microbiome_species
+class Lactobacillus(MicrobiomeSpecies):
+    def __init__(self, abundance=2):
+        super().__init__(
+            name="Lactobacillus", 
+            role="anxiety_reducer",
+            effect=lambda sys: sys.absorb_overload(2), 
+            abundance=abundance
+        )
+
+@register_microbiome_species
+class Bifidobacterium(MicrobiomeSpecies):
+    def __init__(self, abundance=2):
+        super().__init__(
+            name="Bifidobacterium", 
+            role="memory_helper",
+            effect=lambda sys: sys.boost_memory(1), 
+            abundance=abundance
+        )
+
+@register_microbiome_species
+class Pathogenus(MicrobiomeSpecies):
+    def __init__(self, abundance=1):
+        super().__init__(
+            name="Pathogenus", 
+            role="anxiety_trigger",
+            effect=lambda sys: sys.trigger_anxiety(3), 
+            is_bad=True, 
+            abundance=abundance
+        )
 
 # --- Neuron loop (simulated) ---
 class NeuronLoop:
@@ -141,7 +240,8 @@ class VagusNerve:
         except Exception as e:
             logging.error(f"[VagusNerve] Transmission error: {e}")
 
-# --- ThreeDimensionalHRO cognitive engine ---
+# --- Registered ThreeDimensionalHRO cognitive engine ---
+@register_cognitive_engine("threedimensionalhro")
 class ThreeDimensionalHRO:
     def __init__(
         self,
@@ -175,15 +275,18 @@ class ThreeDimensionalHRO:
 
     # --- Microbiome species & population dynamics ---
     def _init_microbiome_species(self):
-        helpers = [
-            MicrobiomeSpecies(
-                name="Lactobacillus", role="anxiety_reducer",
-                effect=lambda sys: sys.absorb_overload(2), abundance=2
-            ),
-            MicrobiomeSpecies(
-                name="Bifidobacterium", role="memory_helper",
-                effect=lambda sys: sys.boost_memory(1), abundance=2
-            ),
+        """Initialize microbiome using registered species."""
+        species_list = []
+        
+        # Add beneficial species
+        species_list.append(get_microbiome_species("lactobacillus")(abundance=2))
+        species_list.append(get_microbiome_species("bifidobacterium")(abundance=2))
+        
+        # Add pathogenic species
+        species_list.append(get_microbiome_species("pathogenus")(abundance=1))
+        
+        # Add additional species with lambda functions for complex effects
+        species_list.extend([
             MicrobiomeSpecies(
                 name="DopamineActivator", role="activity_boost",
                 effect=lambda sys: [n.stimulate(2) for n in self.neurons], abundance=1
@@ -196,12 +299,6 @@ class ThreeDimensionalHRO:
                 name="Faecalibacterium", role="anti_inflammatory",
                 effect=lambda sys: sys.absorb_overload(1), abundance=1
             ),
-        ]
-        attackers = [
-            MicrobiomeSpecies(
-                name="Pathogenus", role="anxiety_trigger",
-                effect=lambda sys: sys.trigger_anxiety(3), is_bad=True, abundance=1
-            ),
             MicrobiomeSpecies(
                 name="Clostridium_difficile", role="memory_disruptor",
                 effect=lambda sys: setattr(sys, 'memory', max(0, sys.memory - 2)), is_bad=True, abundance=1
@@ -210,11 +307,12 @@ class ThreeDimensionalHRO:
                 name="E_coli_pathogenic", role="defense_weakener",
                 effect=lambda sys: setattr(sys, 'cyber_defense', max(1, sys.cyber_defense - 1)), is_bad=True, abundance=1
             ),
-        ]
-        species = helpers + attackers
-        if len(species) > self.species_capacity:
-            species = random.sample(species, self.species_capacity)
-        return species
+        ])
+        
+        if len(species_list) > self.species_capacity:
+            species_list = random.sample(species_list, self.species_capacity)
+        
+        return species_list
 
     def update_population_dynamics(self):
         beneficial = [s for s in self.microbiome if not s.is_bad]
@@ -466,4 +564,73 @@ class ThreeDimensionalHRO:
                     best, best_e = current.copy(), current_e
             temperature *= cooling_rate
             iteration += 1
-        out = {"strategy": "complex", "algorithm": "simulated_annealing", "iterations": iteration, "best
+        out = {"strategy": "complex", "algorithm": "simulated_annealing", "iterations": iteration, 
+               "best_solution": {"parameters": best, "energy": best_e}, "final_temperature": temperature}
+        with self._opt_lock:
+            self.optimization_history.append(out)
+        return out
+
+    def _adaptive_optimization(self, problem_space: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        # Adaptive strategy that switches between simple and complex based on problem characteristics
+        complexity = problem_space.get("complexity", "medium")
+        if complexity == "low" or problem_space.get("dimensions", 3) < 5:
+            return self._simple_optimization(problem_space, **kwargs)
+        else:
+            return self._complex_optimization(problem_space, **kwargs)
+
+    def _qubo_energy(self, solution: List[int], problem_space: Dict[str, Any]) -> float:
+        """Calculate QUBO energy for optimization problems."""
+        n = len(solution)
+        energy = 0.0
+        # Simple quadratic model for demonstration
+        for i in range(n):
+            for j in range(i+1, n):
+                weight = problem_space.get("weights", {}).get(f"{i}_{j}", random.random())
+                energy += weight * solution[i] * solution[j]
+        return energy
+
+    def _acceptance_probability(self, current_energy: float, new_energy: float, temperature: float) -> float:
+        """Calculate acceptance probability for simulated annealing."""
+        if temperature == 0:
+            return 0.0
+        return min(1.0, (current_energy - new_energy) / temperature)
+
+
+# --- Example usage and factory functions ---
+def create_default_cognitive_system(**kwargs):
+    """Factory function to create a default cognitive system."""
+    return build_cognitive_engine("threedimensionalhro", **kwargs)
+
+def list_registered_components():
+    """List all registered components."""
+    return {
+        "image_encoders": list(image_encoders.keys()),
+        "cognitive_engines": list(cognitive_engines.keys()),
+        "microbiome_species": list(microbiome_species_registry.keys())
+    }
+
+# --- Example of how to add custom image encoder (following original pattern) ---
+@register_image_encoder
+def custom_vision_encoder(config_encoder, verbose=False, **kwargs):
+    """Example custom image encoder implementation."""
+    logger.info(f"Creating custom vision encoder with config: {config_encoder}")
+    # This would typically return a neural network model
+    return {"type": "custom_vision", "config": config_encoder}
+
+if __name__ == "__main__":
+    # Demo usage
+    print("Available components:", list_registered_components())
+    
+    # Create cognitive system
+    engine = create_default_cognitive_system(
+        reasoning_mode="hybrid",
+        optimization_strategy="adaptive"
+    )
+    
+    # Run a simulation
+    engine.simulate_microbiome_phase("busy")
+    result = engine.safe_think("test_agent", "This is a test of the cognitive system.")
+    print("Thinking result:", result)
+    
+    # Run diagnostics
+    engine.run_diagnostics()
