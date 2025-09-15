@@ -6,8 +6,9 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 try:
     import yaml  # type: ignore
@@ -25,30 +26,100 @@ if not logger.handlers:
 # Constraint / Policy Engine (lightweight & flexible)
 # --------------------------------------------------------------------------------------
 
+class Severity(str, Enum):
+    MINOR = "minor"
+    MAJOR = "major"
+    SEVERE = "severe"
+
+def _parse_severity(value: str | Severity | None) -> Severity:
+    if isinstance(value, Severity):
+        return value
+    if not value:
+        return Severity.MINOR
+    v = str(value).lower()
+    if v == "severe":
+        return Severity.SEVERE
+    if v == "major":
+        return Severity.MAJOR
+    return Severity.MINOR
+
+# Rule check can return:
+#   True  -> pass
+#   False -> fail (no rationale)
+#   (bool, str) -> (pass, rationale_or_message_if_fail)
+RuleCheckResult = Union[bool, Tuple[bool, Optional[str]]]
+RuleCheckFn = Callable[[Dict[str, Any]], RuleCheckResult]
+
+@dataclass
 class ConstraintRule:
-    def __init__(self, name: str, check: Callable[[Dict[str, Any]], bool],
-                 severity: str = "minor", description: str = ""):
-        self.name = name
-        self.check = check
-        self.severity = severity
-        self.description = description
+    """
+    Represents a single policy/constraint rule.
 
-    def evaluate(self, outcome: Dict[str, Any]) -> bool:
+    check(outcome) should return:
+      - bool
+      - or (bool, str) where the str is an optional rationale on failure.
+    """
+    name: str
+    check: RuleCheckFn
+    severity: Severity = Severity.MINOR
+    description: str = ""
+
+    def run(self, outcome: Dict[str, Any]) -> Tuple[bool, Optional[str], Optional[Exception]]:
+        """Execute the rule and return (passed, rationale, exception)."""
         try:
-            return self.check(outcome)
-        except Exception:
-            return False
+            result = self.check(outcome)
+            if isinstance(result, tuple):
+                passed, rationale = result
+                return bool(passed), rationale, None
+            return bool(result), None, None
+        except Exception as exc:  # Conservative: treat exceptions as failures
+            return False, f"Rule execution error: {exc}", exc
 
+    # Backwards compatibility: prior code expected rule.evaluate(outcome)->bool
+    def evaluate(self, outcome: Dict[str, Any]) -> bool:
+        passed, _, _ = self.run(outcome)
+        return passed
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "severity": self.severity.value,
+            "description": self.description,
+        }
 
 class PolicyEngine:
+    """
+    Evaluates a set of rules against an outcome.
+
+    New richer interface:
+        evaluate(outcome, rich=True) -> List[Dict[str, Any]] of violation descriptors.
+    Legacy interface:
+        evaluate(outcome, rich=False) -> List[ConstraintRule] (failed rules only).
+    """
+
     def __init__(self, rules: Optional[List[ConstraintRule]] = None):
         self.rules = rules or []
 
     def register_rule(self, rule: ConstraintRule) -> None:
         self.rules.append(rule)
 
-    def evaluate(self, outcome: Dict[str, Any]) -> List[ConstraintRule]:
-        return [r for r in self.rules if not r.evaluate(outcome)]
+    def evaluate(self, outcome: Dict[str, Any], rich: bool = False) -> Union[List[ConstraintRule], List[Dict[str, Any]]]:
+        violations_rules: List[ConstraintRule] = []
+        rich_violations: List[Dict[str, Any]] = []
+
+        for rule in self.rules:
+            passed, rationale, error = rule.run(outcome)
+            if not passed:
+                violations_rules.append(rule)
+                if rich:
+                    rich_violations.append({
+                        "name": rule.name,
+                        "severity": rule.severity.value,
+                        "description": rule.description,
+                        "rationale": rationale,
+                        "error": str(error) if error else None,
+                    })
+        return rich_violations if rich else violations_rules
 
 
 class CognitiveFault(Exception):
@@ -62,7 +133,7 @@ class CognitiveFault(Exception):
 
 # Utility rule generators / custom funcs
 
-def keyword_rule(keywords: List[str]) -> Callable[[Dict[str, Any]], bool]:
+def keyword_rule(keywords: List[str]) -> RuleCheckFn:
     kws = [k.lower() for k in keywords]
     def check(outcome: Dict[str, Any]) -> bool:
         content = str(outcome.get("content", "")).lower()
@@ -70,7 +141,7 @@ def keyword_rule(keywords: List[str]) -> Callable[[Dict[str, Any]], bool]:
     return check
 
 
-def regex_rule(pattern: str, flags: int = re.IGNORECASE) -> Callable[[Dict[str, Any]], bool]:
+def regex_rule(pattern: str, flags: int = re.IGNORECASE) -> RuleCheckFn:
     rx = re.compile(pattern, flags)
     def check(outcome: Dict[str, Any]) -> bool:
         return rx.search(str(outcome.get("content", ""))) is None
@@ -116,7 +187,7 @@ def load_rules_from_file(path: str | Path) -> List[ConstraintRule]:
     rules: List[ConstraintRule] = []
     for r in rules_cfg:
         name = r["name"]
-        severity = r.get("severity", "minor")
+        severity = _parse_severity(r.get("severity", "minor"))
         description = r.get("description", "")
         rtype = r["type"]
         if rtype == "keyword":
@@ -181,7 +252,6 @@ class MonitorFactory:
             )
         else:
             logger.warning("[MINOR] %s", msg)
-            # optionally push to agent interaction history
             agent.interaction_history.append({
                 "type": "monitor_minor",
                 "monitor": spec.name,
@@ -197,18 +267,23 @@ class MonitorFactory:
             raise ValueError("rcd_policy monitor requires params.rules_file")
         rules = load_rules_from_file(rules_file)
         pe = PolicyEngine(rules)
+
         def monitor(agent: "DuetMindAgent", task: str, result: Dict[str, Any]) -> None:
             outcome = result if isinstance(result, dict) else {"content": str(result)}
-            violations = pe.evaluate(outcome)
+            # Use rich=True to leverage the enhanced violation structure
+            violations = pe.evaluate(outcome, rich=True)
             if violations:
-                # escalate if any severe present, else minor lumped
-                has_severe = any(v.severity.lower() == "severe" for v in violations)
+                has_severe = any(v.get("severity", "").lower() == "severe" for v in violations)
                 detail = {
                     "outcome": outcome,
-                    "violations": [v.name for v in violations],
+                    "violations": violations,  # full structured violations
                 }
+                effective_spec = spec
+                if has_severe and spec.severity.lower() != "severe":
+                    # escalate severity for this invocation
+                    effective_spec = MonitorSpec(**{**spec.__dict__, "severity": "severe"})
                 MonitorFactory._handle(
-                    spec if not has_severe else MonitorSpec(**{**spec.__dict__, "severity": "severe"}),
+                    effective_spec,
                     agent,
                     task,
                     passed=False,
@@ -246,12 +321,9 @@ class MonitorFactory:
         budget_key = params.get("budget_key", "resource_budget")
         tolerance = float(params.get("tolerance", 0.2))  # e.g., 0.2 = 20%
         def monitor(agent: "DuetMindAgent", task: str, result: Dict[str, Any]) -> None:
-            # Result may optionally contain runtime info set by engine
             runtime = float(result.get("runtime", 0.0)) if isinstance(result, dict) else 0.0
-            # Agent can pass the budget for the task via interaction_history tail or style; keep simple: style may carry default
             budget = float(agent.style.get(budget_key, 0.0))
             if budget <= 0:
-                # if no budget provided, do nothing
                 return
             leakage = (runtime - budget) / budget if budget else 0.0
             violated = leakage > tolerance
@@ -312,7 +384,6 @@ class DuetMindAgent:
         start = time.perf_counter()
         result = self.engine.safe_think(self.name, task) if self.engine else {"content": "No engine", "confidence": 0.5}
         runtime = time.perf_counter() - start
-        # normalize and attach runtime
         if not isinstance(result, dict):
             result = {"content": str(result), "confidence": 0.5}
         result.setdefault("runtime", runtime)
@@ -398,7 +469,7 @@ class DuetMindAgent:
             result = entry["response"].get("result", {})
             total_conf += float(result.get("confidence", 0.5))
             if "style_insights" in result:
-                contributions[agent]["insights"].extend(result["style_insights"])  # <-- FIXED: Removed () after extend
+                contributions[agent]["insights"].extend(result["style_insights"])
                 insights_count += len(result["style_insights"])
         avg_conf = total_conf / len(dialogue_history) if dialogue_history else 0.0
         return {
@@ -450,9 +521,7 @@ class DuetMindAgent:
 class ExampleEngine:
     """Toy engine that returns a dict result with content and confidence."""
     def safe_think(self, agent_name: str, task: str) -> Dict[str, Any]:
-        # Simulate some work
         time.sleep(0.02)
-        # Produce a deterministic pseudo-result for the demo
         conf = 0.6 if "Round" in task else 0.9
         content = f"[{agent_name}] Thoughts about: {task}"
         return {"content": content, "confidence": conf}
@@ -468,7 +537,6 @@ def _write_demo_files(tmpdir: Path) -> Dict[str, Path]:
     rules_yaml = tmpdir / "rules.yaml"
 
     if yaml is None:
-        # JSON fallback if PyYAML not installed
         agent_json = tmpdir / "agent.json"
         agent_json.write_text(json.dumps({
             "name": "Athena",
@@ -493,7 +561,6 @@ def _write_demo_files(tmpdir: Path) -> Dict[str, Path]:
         }, indent=2))
         return {"agent": agent_json}
 
-    # YAML versions
     agent_yaml.write_text(
         """
 name: Athena
@@ -559,22 +626,18 @@ def _demo() -> None:
     engine = ExampleEngine()
     agent = DuetMindAgent.from_config(files["agent"], engine=engine)
 
-    # Provide a default per-task resource budget in style for the resource monitor demo
     agent.style.setdefault("resource_budget", 0.01)
 
-    # Run a safe task
     print("\n--- SAFE RUN ---")
     out = agent.generate_reasoning_tree("Intro: collaborative planning")
     print(json.dumps(out, indent=2))
 
-    # Run a dialogue with a second agent
     print("\n--- DIALOGUE ---")
     agent_b = DuetMindAgent("Apollo", {"logic": 0.7, "creativity": 0.8, "analytical": 0.5}, engine=engine, monitors=agent.monitors)
     convo = agent.dialogue_with(agent_b, topic="Designing a fair tournament", rounds=2)
     print(f"participants: {convo['participants']}")
     print(f"final_topic: {convo['final_topic']}")
 
-    # Persistence
     save_path = tmpdir / "athena.state.json"
     agent.save_state(str(save_path))
     _ = DuetMindAgent.load_state(str(save_path), engine=engine, monitors=agent.monitors)
