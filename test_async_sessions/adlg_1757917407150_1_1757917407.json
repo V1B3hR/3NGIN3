@@ -1,0 +1,203 @@
+{
+  "session_id": "adlg_1757917407150_1",
+  "topic_start": "Ethical frameworks for autonomous swarms",
+  "topic_final": "Explore: Explore: Ethical frameworks for autonomous swarms",
+  "topic_evolution": [
+    "Ethical frameworks for autonomous swarms",
+    "Explore: Ethical frameworks for autonomous swarms",
+    "Explore: Explore: Ethical frameworks for autonomous swarms"
+  ],
+  "transcript": [
+    {
+      "session_id": "adlg_1757917407150_1",
+      "round": 1,
+      "agent": "Athena",
+      "prompt": "Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Athena): Construct rigorous arguments and rebuttals.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+      "content": "[Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Athena): Construct rigorous arguments and rebuttals.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+      "confidence": 0.7280000000000001,
+      "raw": {
+        "root": "Athena_reasoning_1",
+        "result": {
+          "content": "[Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Athena): Construct rigorous arguments and rebuttals.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+          "confidence": 0.7280000000000001,
+          "runtime": 0.020202197000003252,
+          "measured_runtime": 0.020202197000003252,
+          "original_confidence": 0.65,
+          "style_insights": [
+            "Applying rigorous logical validation",
+            "Conducting systematic decomposition"
+          ],
+          "style_signature": "Athena"
+        },
+        "agent": "Athena",
+        "style_applied": true,
+        "schema_version": 2,
+        "runtime_seconds": 0.020202197000003252
+      }
+    },
+    {
+      "session_id": "adlg_1757917407150_1",
+      "round": 1,
+      "agent": "ApolloAsync",
+      "prompt": "Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (ApolloAsync): Construct rigorous arguments and rebuttals.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+      "content": "[ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (ApolloAsync): Construct rigorous arguments and rebuttals.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+      "confidence": 0.663,
+      "raw": {
+        "root": "ApolloAsync_reasoning_0",
+        "result": {
+          "content": "[ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (ApolloAsync): Construct rigorous arguments and rebuttals.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+          "confidence": 0.663,
+          "runtime": 0.0202520899999854,
+          "measured_runtime": 0.0202520899999854,
+          "original_confidence": 0.65,
+          "style_insights": [
+            "Applying rigorous logical validation"
+          ],
+          "style_signature": "ApolloAsync"
+        },
+        "agent": "ApolloAsync",
+        "style_applied": true,
+        "schema_version": 2,
+        "runtime_seconds": 0.0202520899999854
+      }
+    },
+    {
+      "session_id": "adlg_1757917407150_1",
+      "round": 1,
+      "agent": "HermesAsync",
+      "prompt": "Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (HermesAsync): Probe and test assumptions of others' arguments.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+      "content": "[HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (HermesAsync): Probe and test assumptions of others' arguments.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+      "confidence": 0.676,
+      "raw": {
+        "root": "HermesAsync_reasoning_0",
+        "result": {
+          "content": "[HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (HermesAsync): Probe and test assumptions of others' arguments.\nRecent Context:\nNo prior turns.\nRespond with reasoning, avoid repetition, add value.",
+          "confidence": 0.676,
+          "runtime": 0.020647067000027164,
+          "measured_runtime": 0.020647067000027164,
+          "original_confidence": 0.65,
+          "style_insights": [
+            "Exploring creative alternative perspectives"
+          ],
+          "style_signature": "HermesAsync"
+        },
+        "agent": "HermesAsync",
+        "style_applied": true,
+        "schema_version": 2,
+        "runtime_seconds": 0.020647067000027164
+      }
+    },
+    {
+      "session_id": "adlg_1757917407150_1",
+      "round": 2,
+      "agent": "Athena",
+      "prompt": "Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Athena): Construct rigorous arguments and rebuttals.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+      "content": "[Athena] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Athena): Construct rigorous arguments and rebuttals.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+      "confidence": 0.7280000000000001,
+      "raw": {
+        "root": "Athena_reasoning_3",
+        "result": {
+          "content": "[Athena] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Athena): Construct rigorous arguments and rebuttals.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+          "confidence": 0.7280000000000001,
+          "runtime": 0.020358248000036383,
+          "measured_runtime": 0.020358248000036383,
+          "original_confidence": 0.65,
+          "style_insights": [
+            "Applying rigorous logical validation",
+            "Conducting systematic decomposition"
+          ],
+          "style_signature": "Athena"
+        },
+        "agent": "Athena",
+        "style_applied": true,
+        "schema_version": 2,
+        "runtime_seconds": 0.020358248000036383
+      }
+    },
+    {
+      "session_id": "adlg_1757917407150_1",
+      "round": 2,
+      "agent": "ApolloAsync",
+      "prompt": "Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (ApolloAsync): Construct rigorous arguments and rebuttals.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+      "content": "[ApolloAsync] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (ApolloAsync): Construct rigorous arguments and rebuttals.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+      "confidence": 0.663,
+      "raw": {
+        "root": "ApolloAsync_reasoning_1",
+        "result": {
+          "content": "[ApolloAsync] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (ApolloAsync): Construct rigorous arguments and rebuttals.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+          "confidence": 0.663,
+          "runtime": 0.02030896600001597,
+          "measured_runtime": 0.02030896600001597,
+          "original_confidence": 0.65,
+          "style_insights": [
+            "Applying rigorous logical validation"
+          ],
+          "style_signature": "ApolloAsync"
+        },
+        "agent": "ApolloAsync",
+        "style_applied": true,
+        "schema_version": 2,
+        "runtime_seconds": 0.02030896600001597
+      }
+    },
+    {
+      "session_id": "adlg_1757917407150_1",
+      "round": 2,
+      "agent": "HermesAsync",
+      "prompt": "Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (HermesAsync): Probe and test assumptions of others' arguments.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+      "content": "[HermesAsync] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (HermesAsync): Probe and test assumptions of others' arguments.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+      "confidence": 0.676,
+      "raw": {
+        "root": "HermesAsync_reasoning_1",
+        "result": {
+          "content": "[HermesAsync] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (HermesAsync): Probe and test assumptions of others' arguments.\nRecent Context:\nAthena (r1): [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync (r1): [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync (r1): [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nRespond with reasoning, avoid repetition, add value.",
+          "confidence": 0.676,
+          "runtime": 0.020209018999992168,
+          "measured_runtime": 0.020209018999992168,
+          "original_confidence": 0.65,
+          "style_insights": [
+            "Exploring creative alternative perspectives"
+          ],
+          "style_signature": "HermesAsync"
+        },
+        "agent": "HermesAsync",
+        "style_applied": true,
+        "schema_version": 2,
+        "runtime_seconds": 0.020209018999992168
+      }
+    }
+  ],
+  "participants": [
+    "Athena",
+    "ApolloAsync",
+    "HermesAsync"
+  ],
+  "rounds_executed": 2,
+  "metrics": {
+    "rounds": 2,
+    "avg_confidence": 0.6890000000000001,
+    "turns_per_agent": {
+      "Athena": 2,
+      "ApolloAsync": 2,
+      "HermesAsync": 2
+    },
+    "lexical_diversity": 7.5,
+    "total_turns": 6
+  },
+  "final_summary": {
+    "content": "[Athena] (async) Thoughts about: Final debate synthesis for topic: Explore: Explore: Ethical frameworks for autonomous swarms\nDirective: Highlight principal arguments, rebuttals, unresolved tensions, and potential synthesis.\nRecent Extract (truncated):\nAthena@r1: [Athena] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint (Ath\nApolloAsync@r1: [ApolloAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nHermesAsync@r1: [HermesAsync] (async) Thoughts about: Round 1 | Topic: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole Hint\nAthena@r2: [Athena] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\nRole \nApolloAsync@r2: [ApolloAsync] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\n\nHermesAsync@r2: [HermesAsync] (async) Thoughts about: Round 2 | Topic: Explore: Ethical frameworks for autonomous swarms\nMode Directive: Provide a position, defend it, then critique prior points.\n\nOutput: structured concise synthesis.",
+    "confidence": 0.7280000000000001,
+    "mode": "debate"
+  },
+  "converged": true,
+  "mode": "debate",
+  "strategy": "round_robin",
+  "metadata": {},
+  "timestamp": 1757917407.256929,
+  "parallel_round": true,
+  "persistence_metadata": {
+    "saved_at": 1757917407.2570503,
+    "saved_by_agent": "Athena",
+    "filepath": "test_async_sessions/adlg_1757917407150_1_1757917407.json"
+  }
+}

@@ -4,7 +4,7 @@ monitors:
     severity: severe
     description: Policy rules check on final outcome
     params:
-      rules_file: rules.yaml
+      rules_file: /home/runner/work/3NGIN3/3NGIN3/_duetmind_demo_sync/rules.yaml
   - name: keyword_guard
     type: keyword
     severity: severe
