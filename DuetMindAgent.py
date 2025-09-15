@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -122,13 +123,118 @@ class PolicyEngine:
         return rich_violations if rich else violations_rules
 
 
+# --------------------------------------------------------------------------------------
+# CognitiveFault (Enhanced)
+# --------------------------------------------------------------------------------------
+
 class CognitiveFault(Exception):
-    def __init__(self, message, intent, outcome, leakage, tier="minor"):
+    """
+    Raised when a cognitive / policy / monitoring layer determines execution
+    must halt or escalate.
+
+    Fields:
+        message: Human-readable summary.
+        intent: Dict capturing initiating intent/task context.
+        outcome: Dict representing the model/agent output that triggered the fault.
+        leakage: Dict with resource, policy, or constraint overrun metadata.
+        severity: Enum-backed severity (aligns with rule/monitor severities).
+        violations: Optional structured violations (list of dicts).
+        fault_id: Unique identifier for tracing.
+        timestamp: Epoch seconds for ordering.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        intent: Dict[str, Any],
+        outcome: Dict[str, Any],
+        leakage: Dict[str, Any],
+        severity: Severity = Severity.MINOR,
+        violations: Optional[List[Dict[str, Any]]] = None,
+        cause: Optional[BaseException] = None,
+        fault_id: Optional[str] = None,
+        timestamp: Optional[float] = None,
+    ):
         super().__init__(message)
         self.intent = intent
         self.outcome = outcome
         self.leakage = leakage
-        self.tier = tier
+        self.severity = severity
+        self.violations = violations or []
+        self.fault_id = fault_id or str(uuid.uuid4())
+        self.timestamp = timestamp or time.time()
+        self.__cause__ = cause  # exception chaining support
+
+    @property
+    def tier(self) -> str:
+        # Backward compatibility accessor (legacy code might reference .tier)
+        return self.severity.value
+
+    def to_dict(self, redact: bool = False) -> Dict[str, Any]:
+        return {
+            "fault_id": self.fault_id,
+            "timestamp": self.timestamp,
+            "message": str(self),
+            "severity": self.severity.value,
+            "intent": self.intent,
+            "outcome": self._maybe_redact_dict(self.outcome, redact),
+            "leakage": self.leakage,
+            "violations": self.violations,
+        }
+
+    def _maybe_redact_dict(self, data: Dict[str, Any], redact: bool) -> Dict[str, Any]:
+        if not redact:
+            return data
+        redacted = {}
+        for k, v in data.items():
+            if isinstance(v, str) and len(v) > 400:
+                redacted[k] = v[:200] + " ... [REDACTED] ..."
+            else:
+                redacted[k] = v
+        return redacted
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.violations:
+            vnames = ", ".join(v.get("name", "?") for v in self.violations)
+            return f"{base} | severity={self.severity.value} | violations: {vnames} | id={self.fault_id}"
+        return f"{base} | severity={self.severity.value} | id={self.fault_id}"
+
+    @staticmethod
+    def _derive_highest_severity(violations: List[Dict[str, Any]]) -> Severity:
+        if not violations:
+            return Severity.MINOR
+        order = {Severity.MINOR: 1, Severity.MAJOR: 2, Severity.SEVERE: 3}
+        best = Severity.MINOR
+        for v in violations:
+            sv = _parse_severity(v.get("severity"))
+            if order[sv] > order[best]:
+                best = sv
+        return best
+
+    @classmethod
+    def from_policy_violations(
+        cls,
+        message: str,
+        task: str,
+        outcome: Dict[str, Any],
+        monitor_spec: Dict[str, Any],
+        violations: List[Dict[str, Any]],
+    ) -> "CognitiveFault":
+        severity = cls._derive_highest_severity(violations)
+        leakage = {
+            "type": monitor_spec.get("type"),
+            "name": monitor_spec.get("name"),
+        }
+        intent = {"task": task}
+        return cls(
+            message=message,
+            intent=intent,
+            outcome=outcome,
+            leakage=leakage,
+            severity=severity,
+            violations=violations,
+        )
 
 
 # Utility rule generators / custom funcs
@@ -242,13 +348,21 @@ class MonitorFactory:
         if passed:
             return
         msg = f"Monitor[{spec.name}] violation: {spec.description or spec.type}"
-        if spec.severity.lower() == "severe":
+
+        # Derive severity from spec + optionally from violations if provided
+        violations = detail.get("violations") or []
+        derived = CognitiveFault._derive_highest_severity(violations) if violations else _parse_severity(spec.severity)
+        is_severe = derived == Severity.SEVERE
+
+        if is_severe:
+            # Raise with structured violations (if any)
             raise CognitiveFault(
-                msg,
+                message=msg,
                 intent={"task": task, **(detail.get("intent", {}))},
                 outcome=detail.get("outcome", {}),
                 leakage={"type": spec.type, "name": spec.name, **detail.get("leakage", {})},
-                tier="severe",
+                severity=derived,
+                violations=violations
             )
         else:
             logger.warning("[MINOR] %s", msg)
@@ -257,6 +371,7 @@ class MonitorFactory:
                 "monitor": spec.name,
                 "task": task,
                 "detail": detail,
+                "severity": derived.value,
             })
 
     @staticmethod
@@ -273,22 +388,11 @@ class MonitorFactory:
             # Use rich=True to leverage the enhanced violation structure
             violations = pe.evaluate(outcome, rich=True)
             if violations:
-                has_severe = any(v.get("severity", "").lower() == "severe" for v in violations)
                 detail = {
                     "outcome": outcome,
                     "violations": violations,  # full structured violations
                 }
-                effective_spec = spec
-                if has_severe and spec.severity.lower() != "severe":
-                    # escalate severity for this invocation
-                    effective_spec = MonitorSpec(**{**spec.__dict__, "severity": "severe"})
-                MonitorFactory._handle(
-                    effective_spec,
-                    agent,
-                    task,
-                    passed=False,
-                    detail=detail,
-                )
+                MonitorFactory._handle(spec, agent, task, passed=False, detail=detail)
         return monitor
 
     @staticmethod
@@ -325,11 +429,11 @@ class MonitorFactory:
             budget = float(agent.style.get(budget_key, 0.0))
             if budget <= 0:
                 return
-            leakage = (runtime - budget) / budget if budget else 0.0
-            violated = leakage > tolerance
+            leakage_val = (runtime - budget) / budget if budget else 0.0
+            violated = leakage_val > tolerance
             MonitorFactory._handle(spec, agent, task, not violated, {
                 "outcome": {"runtime": runtime},
-                "leakage": {"budget": budget, "leakage": leakage},
+                "leakage": {"budget": budget, "leakage": leakage_val},
                 "intent": {budget_key: budget},
             })
         return monitor
