@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import time
 import uuid
@@ -24,13 +23,14 @@ if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 # --------------------------------------------------------------------------------------
-# Constraint / Policy Engine (lightweight & flexible)
+# Constraint / Policy Engine
 # --------------------------------------------------------------------------------------
 
 class Severity(str, Enum):
     MINOR = "minor"
     MAJOR = "major"
     SEVERE = "severe"
+
 
 def _parse_severity(value: str | Severity | None) -> Severity:
     if isinstance(value, Severity):
@@ -44,12 +44,14 @@ def _parse_severity(value: str | Severity | None) -> Severity:
         return Severity.MAJOR
     return Severity.MINOR
 
+
 # Rule check can return:
-#   True  -> pass
-#   False -> fail (no rationale)
-#   (bool, str) -> (pass, rationale_or_message_if_fail)
+#   True -> pass
+#   False -> fail
+#   (bool, str) -> (pass, rationale-if-fail)
 RuleCheckResult = Union[bool, Tuple[bool, Optional[str]]]
 RuleCheckFn = Callable[[Dict[str, Any]], RuleCheckResult]
+
 
 @dataclass
 class ConstraintRule:
@@ -73,10 +75,10 @@ class ConstraintRule:
                 passed, rationale = result
                 return bool(passed), rationale, None
             return bool(result), None, None
-        except Exception as exc:  # Conservative: treat exceptions as failures
+        except Exception as exc:
             return False, f"Rule execution error: {exc}", exc
 
-    # Backwards compatibility: prior code expected rule.evaluate(outcome)->bool
+    # Backwards compatibility
     def evaluate(self, outcome: Dict[str, Any]) -> bool:
         passed, _, _ = self.run(outcome)
         return passed
@@ -88,14 +90,13 @@ class ConstraintRule:
             "description": self.description,
         }
 
+
 class PolicyEngine:
     """
     Evaluates a set of rules against an outcome.
 
-    New richer interface:
-        evaluate(outcome, rich=True) -> List[Dict[str, Any]] of violation descriptors.
-    Legacy interface:
-        evaluate(outcome, rich=False) -> List[ConstraintRule] (failed rules only).
+    evaluate(outcome, rich=True)  -> List[Dict[str, Any]] describing violations
+    evaluate(outcome, rich=False) -> List[ConstraintRule] (failed rule objects)
     """
 
     def __init__(self, rules: Optional[List[ConstraintRule]] = None):
@@ -104,10 +105,13 @@ class PolicyEngine:
     def register_rule(self, rule: ConstraintRule) -> None:
         self.rules.append(rule)
 
-    def evaluate(self, outcome: Dict[str, Any], rich: bool = False) -> Union[List[ConstraintRule], List[Dict[str, Any]]]:
+    def evaluate(
+        self,
+        outcome: Dict[str, Any],
+        rich: bool = False
+    ) -> Union[List[ConstraintRule], List[Dict[str, Any]]]:
         violations_rules: List[ConstraintRule] = []
         rich_violations: List[Dict[str, Any]] = []
-
         for rule in self.rules:
             passed, rationale, error = rule.run(outcome)
             if not passed:
@@ -129,18 +133,17 @@ class PolicyEngine:
 
 class CognitiveFault(Exception):
     """
-    Raised when a cognitive / policy / monitoring layer determines execution
-    must halt or escalate.
+    Raised when a cognitive / policy / monitoring layer determines execution must halt.
 
     Fields:
         message: Human-readable summary.
-        intent: Dict capturing initiating intent/task context.
-        outcome: Dict representing the model/agent output that triggered the fault.
-        leakage: Dict with resource, policy, or constraint overrun metadata.
-        severity: Enum-backed severity (aligns with rule/monitor severities).
-        violations: Optional structured violations (list of dicts).
-        fault_id: Unique identifier for tracing.
-        timestamp: Epoch seconds for ordering.
+        intent: Context of initiating task.
+        outcome: Agent output triggering the fault.
+        leakage: Resource/policy metadata.
+        severity: Enum-backed severity (replaces legacy tier).
+        violations: Structured rule violations (list of dicts).
+        fault_id: Unique identifier.
+        timestamp: Epoch time (float).
     """
 
     def __init__(
@@ -163,11 +166,11 @@ class CognitiveFault(Exception):
         self.violations = violations or []
         self.fault_id = fault_id or str(uuid.uuid4())
         self.timestamp = timestamp or time.time()
-        self.__cause__ = cause  # exception chaining support
+        self.__cause__ = cause
 
     @property
     def tier(self) -> str:
-        # Backward compatibility accessor (legacy code might reference .tier)
+        # Backward compatibility (old attribute name)
         return self.severity.value
 
     def to_dict(self, redact: bool = False) -> Dict[str, Any]:
@@ -185,7 +188,7 @@ class CognitiveFault(Exception):
     def _maybe_redact_dict(self, data: Dict[str, Any], redact: bool) -> Dict[str, Any]:
         if not redact:
             return data
-        redacted = {}
+        redacted: Dict[str, Any] = {}
         for k, v in data.items():
             if isinstance(v, str) and len(v) > 400:
                 redacted[k] = v[:200] + " ... [REDACTED] ..."
@@ -222,10 +225,7 @@ class CognitiveFault(Exception):
         violations: List[Dict[str, Any]],
     ) -> "CognitiveFault":
         severity = cls._derive_highest_severity(violations)
-        leakage = {
-            "type": monitor_spec.get("type"),
-            "name": monitor_spec.get("name"),
-        }
+        leakage = {"type": monitor_spec.get("type"), "name": monitor_spec.get("name")}
         intent = {"task": task}
         return cls(
             message=message,
@@ -237,24 +237,113 @@ class CognitiveFault(Exception):
         )
 
 
-# Utility rule generators / custom funcs
+# --------------------------------------------------------------------------------------
+# Utility rule generators / custom funcs (enhanced)
+# --------------------------------------------------------------------------------------
 
-def keyword_rule(keywords: List[str]) -> RuleCheckFn:
-    kws = [k.lower() for k in keywords]
-    def check(outcome: Dict[str, Any]) -> bool:
-        content = str(outcome.get("content", "")).lower()
-        return not any(kw in content for kw in kws)
+def keyword_rule(
+    keywords: List[str],
+    match_mode: str = "any",
+    whole_word: bool = False,
+    case_insensitive: bool = True,
+) -> RuleCheckFn:
+    """
+    Build a keyword exclusion rule.
+
+    Parameters:
+        keywords: List of blocked keyword tokens.
+        match_mode: 'any' (fail if any keyword appears) or 'all' (fail only if all appear).
+        whole_word: If True, matches must be whole-token (word boundary).
+        case_insensitive: If True, lowercase normalization (or regex IGNORECASE) is applied.
+    """
+    if not keywords:
+        return lambda outcome: True
+
+    if case_insensitive:
+        kws_for_match = [k.lower() for k in keywords]
+    else:
+        kws_for_match = keywords
+
+    if whole_word:
+        flags = re.IGNORECASE if case_insensitive else 0
+        compiled = [(kw, re.compile(rf"\b{re.escape(kw)}\b", flags)) for kw in kws_for_match]
+
+        def check(outcome: Dict[str, Any]) -> RuleCheckResult:
+            content = str(outcome.get("content", ""))
+            haystack = content if not case_insensitive else content.lower()
+            matched: List[str] = []
+            for orig_kw, rx in compiled:
+                if rx.search(haystack):
+                    matched.append(orig_kw)
+            if match_mode == "all":
+                failed = all(kw in matched for kw in kws_for_match)
+            else:
+                failed = len(matched) > 0
+            if failed:
+                return False, f"Blocked keyword(s) detected: {', '.join(sorted(set(matched)))}"
+            return True
+        return check
+
+    def check(outcome: Dict[str, Any]) -> RuleCheckResult:
+        content = str(outcome.get("content", ""))
+        haystack = content if not case_insensitive else content.lower()
+        present = [kw for kw in kws_for_match if kw in haystack]
+        if match_mode == "all":
+            failed = len(present) == len(kws_for_match)
+        else:
+            failed = len(present) > 0
+        if failed:
+            return False, f"Blocked keyword substring(s): {', '.join(sorted(set(present)))}"
+        return True
+
     return check
+
+
+def _parse_pattern_flags(flag_string: Optional[str]) -> int:
+    """
+    Convert a pipe-delimited string of flag names (e.g. 'IGNORECASE|MULTILINE')
+    into a combined re flag integer. Unknown names are ignored.
+    """
+    if not flag_string:
+        return 0
+    mapping = {
+        "IGNORECASE": re.IGNORECASE,
+        "MULTILINE": re.MULTILINE,
+        "DOTALL": re.DOTALL,
+        "ASCII": re.ASCII,
+        "VERBOSE": re.VERBOSE,
+    }
+    total = 0
+    for part in (p.strip().upper() for p in flag_string.split("|")):
+        total |= mapping.get(part, 0)
+    return total
 
 
 def regex_rule(pattern: str, flags: int = re.IGNORECASE) -> RuleCheckFn:
+    """
+    Build a regex exclusion rule.
+    Fails if the pattern matches the content. Returns rationale with first (and count if multiple) match.
+    """
     rx = re.compile(pattern, flags)
-    def check(outcome: Dict[str, Any]) -> bool:
-        return rx.search(str(outcome.get("content", ""))) is None
+
+    def check(outcome: Dict[str, Any]) -> RuleCheckResult:
+        content = str(outcome.get("content", ""))
+        matches = list(rx.finditer(content))
+        if matches:
+            first = matches[0].group(0)
+            if len(matches) == 1:
+                return False, f"Regex pattern matched: '{first}'"
+            return False, f"Regex pattern matched {len(matches)} times; first: '{first}'"
+        return True
+
     return check
 
 
-def applied_ethics_check(outcome: Dict[str, Any]) -> bool:
+def applied_ethics_check(outcome: Dict[str, Any]) -> RuleCheckResult:
+    """
+    Flags content that simultaneously contains a moral/ethical token and a controversy-related token.
+    Returns rationale listing the overlapping categories if triggered.
+    """
     content = str(outcome.get("content", "")).lower()
     moral_keywords = [
         "right", "wrong", "justice", "fair", "unfair", "harm", "benefit",
@@ -264,13 +353,21 @@ def applied_ethics_check(outcome: Dict[str, Any]) -> bool:
         "controversy", "debate", "dispute", "conflict", "argument",
         "polarizing", "divisive", "hotly debated", "scandal",
     ]
-    return not (
-        any(kw in content for kw in moral_keywords)
-        and any(kw in content for kw in controversy_keywords)
-    )
+    moral_hits = {kw for kw in moral_keywords if kw in content}
+    controversy_hits = {kw for kw in controversy_keywords if kw in content}
+    triggered = bool(moral_hits and controversy_hits)
+    if triggered:
+        return False, (
+            "Applied ethics review triggered: moral terms ("
+            + ", ".join(sorted(moral_hits))
+            + ") with controversy terms ("
+            + ", ".join(sorted(controversy_hits))
+            + ")"
+        )
+    return True
 
 
-CUSTOM_FUNCS: Dict[str, Callable[[Dict[str, Any]], bool]] = {
+CUSTOM_FUNCS: Dict[str, RuleCheckFn] = {
     "applied_ethics_check": applied_ethics_check,
 }
 
@@ -278,41 +375,91 @@ CUSTOM_FUNCS: Dict[str, Callable[[Dict[str, Any]], bool]] = {
 def _load_data_file(path: Path) -> Dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Config not found: {path}")
-    if path.suffix.lower() in (".yaml", ".yml"):
+    suffix = path.suffix.lower()
+    if suffix in (".yaml", ".yml"):
         if yaml is None:
             raise RuntimeError("PyYAML not installed, cannot read YAML. Use JSON or install pyyaml.")
         return yaml.safe_load(path.read_text())
-    if path.suffix.lower() == ".json":
+    if suffix == ".json":
         return json.loads(path.read_text())
     raise ValueError(f"Unsupported config format: {path.suffix}")
 
 
 def load_rules_from_file(path: str | Path) -> List[ConstraintRule]:
+    """
+    Load rules from JSON or YAML.
+
+    Extended optional params per rule:
+      keyword rules:
+        match_mode: 'any' (default) or 'all'
+        whole_word: bool
+        case_insensitive: bool
+      regex rules:
+        pattern_flags: pipe-delimited (e.g. "IGNORECASE|MULTILINE")
+
+    Example (YAML):
+      rules:
+        - name: block_sensitive
+          type: keyword
+          severity: severe
+          keywords: ["secret", "password"]
+          match_mode: any
+          whole_word: false
+          case_insensitive: true
+        - name: ban_token_pattern
+          type: regex
+          pattern: "\\bAKIA[0-9A-Z]{16}\\b"
+          pattern_flags: IGNORECASE
+    """
     data = _load_data_file(Path(path))
     rules_cfg = data.get("rules", [])
+    if not isinstance(rules_cfg, list):
+        raise ValueError("Config 'rules' must be a list")
+
     rules: List[ConstraintRule] = []
     for r in rules_cfg:
-        name = r["name"]
-        severity = _parse_severity(r.get("severity", "minor"))
-        description = r.get("description", "")
-        rtype = r["type"]
+        if not isinstance(r, dict):
+            raise ValueError(f"Rule entry must be an object: {r}")
+        try:
+            name = r["name"]
+            severity = _parse_severity(r.get("severity", "minor"))
+            description = r.get("description", "")
+            rtype = r["type"]
+        except KeyError as ke:
+            raise ValueError(f"Missing required rule field: {ke} in {r}") from ke
+
         if rtype == "keyword":
-            check = keyword_rule(r["keywords"])
+            keywords = r.get("keywords")
+            if not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
+                raise ValueError(f"Rule '{name}': 'keywords' must be a list[str]")
+            check = keyword_rule(
+                keywords=keywords,
+                match_mode=r.get("match_mode", "any"),
+                whole_word=bool(r.get("whole_word", False)),
+                case_insensitive=bool(r.get("case_insensitive", True)),
+            )
         elif rtype == "regex":
-            check = regex_rule(r["pattern"], re.IGNORECASE)
+            pattern = r.get("pattern")
+            if not pattern or not isinstance(pattern, str):
+                raise ValueError(f"Rule '{name}': 'pattern' must be a non-empty string")
+            flags = re.IGNORECASE  # default to maintain backward behavior
+            extra_flags = _parse_pattern_flags(r.get("pattern_flags"))
+            flags |= extra_flags
+            check = regex_rule(pattern, flags)
         elif rtype == "custom":
-            func_name = r["func"]
-            if func_name not in CUSTOM_FUNCS:
-                raise ValueError(f"Unknown custom func: {func_name}")
+            func_name = r.get("func")
+            if not func_name or func_name not in CUSTOM_FUNCS:
+                raise ValueError(f"Rule '{name}': unknown custom func '{func_name}'")
             check = CUSTOM_FUNCS[func_name]
         else:
-            raise ValueError(f"Unknown rule type: {rtype}")
+            raise ValueError(f"Rule '{name}': Unknown rule type: {rtype}")
+
         rules.append(ConstraintRule(name, check, severity, description))
     return rules
 
 
 # --------------------------------------------------------------------------------------
-# Monitor system (end-to-end configurable)
+# Monitor system
 # --------------------------------------------------------------------------------------
 
 MonitorFn = Callable[["DuetMindAgent", str, Dict[str, Any]], None]
@@ -348,14 +495,11 @@ class MonitorFactory:
         if passed:
             return
         msg = f"Monitor[{spec.name}] violation: {spec.description or spec.type}"
-
-        # Derive severity from spec + optionally from violations if provided
         violations = detail.get("violations") or []
         derived = CognitiveFault._derive_highest_severity(violations) if violations else _parse_severity(spec.severity)
         is_severe = derived == Severity.SEVERE
 
         if is_severe:
-            # Raise with structured violations (if any)
             raise CognitiveFault(
                 message=msg,
                 intent={"task": task, **(detail.get("intent", {}))},
@@ -385,12 +529,11 @@ class MonitorFactory:
 
         def monitor(agent: "DuetMindAgent", task: str, result: Dict[str, Any]) -> None:
             outcome = result if isinstance(result, dict) else {"content": str(result)}
-            # Use rich=True to leverage the enhanced violation structure
             violations = pe.evaluate(outcome, rich=True)
             if violations:
                 detail = {
                     "outcome": outcome,
-                    "violations": violations,  # full structured violations
+                    "violations": violations,
                 }
                 MonitorFactory._handle(spec, agent, task, passed=False, detail=detail)
         return monitor
@@ -399,6 +542,7 @@ class MonitorFactory:
     def _keyword_monitor(spec: MonitorSpec) -> MonitorFn:
         params = spec.params or {}
         keywords = [k.lower() for k in params.get("keywords", [])]
+
         def monitor(agent: "DuetMindAgent", task: str, result: Dict[str, Any]) -> None:
             content = str(result.get("content", "")).lower() if isinstance(result, dict) else str(result).lower()
             violated = any(kw in content for kw in keywords)
@@ -413,6 +557,7 @@ class MonitorFactory:
         rx = re.compile(pattern, flags) if pattern else None
         if rx is None:
             raise ValueError("regex monitor requires params.pattern")
+
         def monitor(agent: "DuetMindAgent", task: str, result: Dict[str, Any]) -> None:
             content = str(result.get("content", "")) if isinstance(result, dict) else str(result)
             violated = rx.search(content) is not None
@@ -423,7 +568,8 @@ class MonitorFactory:
     def _resource_monitor(spec: MonitorSpec) -> MonitorFn:
         params = spec.params or {}
         budget_key = params.get("budget_key", "resource_budget")
-        tolerance = float(params.get("tolerance", 0.2))  # e.g., 0.2 = 20%
+        tolerance = float(params.get("tolerance", 0.2))
+
         def monitor(agent: "DuetMindAgent", task: str, result: Dict[str, Any]) -> None:
             runtime = float(result.get("runtime", 0.0)) if isinstance(result, dict) else 0.0
             budget = float(agent.style.get(budget_key, 0.0))
@@ -445,6 +591,7 @@ class MonitorFactory:
         func = CUSTOM_FUNCS.get(func_name)
         if func is None:
             raise ValueError(f"Unknown custom func: {func_name}")
+
         def monitor(agent: "DuetMindAgent", task: str, result: Dict[str, Any]) -> None:
             outcome = result if isinstance(result, dict) else {"content": str(result)}
             passed = func(outcome)
@@ -468,13 +615,19 @@ class MonitorManager:
 
 
 # --------------------------------------------------------------------------------------
-# DuetMindAgent with persistence and config-driven personalities
+# DuetMindAgent
 # --------------------------------------------------------------------------------------
 
 class DuetMindAgent:
     """A cognitive agent with style, reasoning, persistence, and pluggable monitors."""
 
-    def __init__(self, name: str, style: Dict[str, float], engine=None, monitors: Optional[List[MonitorFn]] = None):
+    def __init__(
+        self,
+        name: str,
+        style: Dict[str, float],
+        engine=None,
+        monitors: Optional[List[MonitorFn]] = None
+    ):
         self.name = name
         self.style = style
         self.engine = engine
@@ -483,16 +636,17 @@ class DuetMindAgent:
         self.interaction_history: List[Dict[str, Any]] = []
         logger.info(f"Agent '{name}' initialized with style {style} and {len(self.monitors)} monitors.")
 
-    # Reasoning + monitors
     def generate_reasoning_tree(self, task: str) -> Dict[str, Any]:
         start = time.perf_counter()
-        result = self.engine.safe_think(self.name, task) if self.engine else {"content": "No engine", "confidence": 0.5}
+        result = self.engine.safe_think(self.name, task) if self.engine else {
+            "content": "No engine",
+            "confidence": 0.5
+        }
         runtime = time.perf_counter() - start
         if not isinstance(result, dict):
             result = {"content": str(result), "confidence": 0.5}
         result.setdefault("runtime", runtime)
 
-        # Run pluggable monitors
         for monitor in self.monitors:
             monitor(self, task, result)
 
@@ -531,7 +685,6 @@ class DuetMindAgent:
         styled_result["style_signature"] = self.name
         return styled_result
 
-    # Dialogue
     def dialogue_with(self, other_agent: 'DuetMindAgent', topic: str, rounds: int = 3) -> Dict[str, Any]:
         dialogue_history: List[Dict[str, Any]] = []
         current_topic = topic
@@ -584,7 +737,6 @@ class DuetMindAgent:
             "cognitive_diversity": len({c["agent"] for c in dialogue_history}),
         }
 
-    # Persistence
     def save_state(self, path: str) -> None:
         state = {
             "name": self.name,
@@ -596,7 +748,12 @@ class DuetMindAgent:
         logger.info(f"Agent state saved to {path}")
 
     @classmethod
-    def load_state(cls, path: str, engine=None, monitors: Optional[List[MonitorFn]] = None) -> 'DuetMindAgent':
+    def load_state(
+        cls,
+        path: str,
+        engine=None,
+        monitors: Optional[List[MonitorFn]] = None
+    ) -> 'DuetMindAgent':
         state = json.loads(Path(path).read_text())
         agent = cls(state["name"], state.get("style", {}), engine=engine, monitors=monitors)
         agent.knowledge_graph = state.get("knowledge_graph", {})
@@ -604,13 +761,16 @@ class DuetMindAgent:
         logger.info(f"Agent state loaded from {path}")
         return agent
 
-    # Config-driven creation (agent + monitors)
     @staticmethod
     def from_config(config_path: str | Path, engine=None) -> 'DuetMindAgent':
         cfg = _load_data_file(Path(config_path))
         name = cfg["name"]
         style = cfg.get("style", {})
-        monitors_path = cfg.get("monitors", {}).get("file") if isinstance(cfg.get("monitors"), dict) else cfg.get("monitors")
+        monitors_path = (
+            cfg.get("monitors", {}).get("file")
+            if isinstance(cfg.get("monitors"), dict)
+            else cfg.get("monitors")
+        )
         monitors: List[MonitorFn] = []
         if monitors_path:
             mm = MonitorManager.load_from_file(Path(config_path).parent / monitors_path)
@@ -619,7 +779,7 @@ class DuetMindAgent:
 
 
 # --------------------------------------------------------------------------------------
-# Minimal example Engine
+# Minimal Example Engine
 # --------------------------------------------------------------------------------------
 
 class ExampleEngine:
@@ -632,7 +792,7 @@ class ExampleEngine:
 
 
 # --------------------------------------------------------------------------------------
-# Demo
+# Demo Utilities
 # --------------------------------------------------------------------------------------
 
 def _write_demo_files(tmpdir: Path) -> Dict[str, Path]:
@@ -649,18 +809,31 @@ def _write_demo_files(tmpdir: Path) -> Dict[str, Path]:
         }, indent=2))
         (tmpdir / "monitors.json").write_text(json.dumps({
             "monitors": [
-                {"name": "policy_rcd", "type": "rcd_policy", "severity": "severe",
-                 "description": "Policy rules check on final outcome",
-                 "params": {"rules_file": "rules.json"}},
-                {"name": "keyword_guard", "type": "keyword", "severity": "severe",
-                 "description": "Block certain tokens",
-                 "params": {"keywords": ["manipulation", "hate", "racist"]}},
+                {
+                    "name": "policy_rcd",
+                    "type": "rcd_policy",
+                    "severity": "severe",
+                    "description": "Policy rules check on final outcome",
+                    "params": {"rules_file": "rules.json"}
+                },
+                {
+                    "name": "keyword_guard",
+                    "type": "keyword",
+                    "severity": "severe",
+                    "description": "Block certain tokens",
+                    "params": {"keywords": ["manipulation", "hate", "racist"]}
+                },
             ]
         }, indent=2))
         (tmpdir / "rules.json").write_text(json.dumps({
             "rules": [
-                {"name": "no_manipulation", "severity": "severe", "description": "Blocks manipulation",
-                 "type": "keyword", "keywords": ["manipulate", "manipulation", "gaslight", "coerce", "deceive", "exploit"]}
+                {
+                    "name": "no_manipulation",
+                    "severity": "severe",
+                    "description": "Blocks manipulation",
+                    "type": "keyword",
+                    "keywords": ["manipulate", "manipulation", "gaslight", "coerce", "deceive", "exploit"]
+                }
             ]
         }, indent=2))
         return {"agent": agent_json}
@@ -737,7 +910,8 @@ def _demo() -> None:
     print(json.dumps(out, indent=2))
 
     print("\n--- DIALOGUE ---")
-    agent_b = DuetMindAgent("Apollo", {"logic": 0.7, "creativity": 0.8, "analytical": 0.5}, engine=engine, monitors=agent.monitors)
+    agent_b = DuetMindAgent("Apollo", {"logic": 0.7, "creativity": 0.8, "analytical": 0.5},
+                            engine=engine, monitors=agent.monitors)
     convo = agent.dialogue_with(agent_b, topic="Designing a fair tournament", rounds=2)
     print(f"participants: {convo['participants']}")
     print(f"final_topic: {convo['final_topic']}")
