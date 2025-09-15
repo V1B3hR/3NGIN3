@@ -77,3 +77,7 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# DuetMindAgent demo and session files
+_duetmind_demo_*/
+sessions/

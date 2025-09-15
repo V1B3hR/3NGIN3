@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import logging
@@ -1166,7 +1167,7 @@ class DuetMindAgent:
                     topic=topic,
                     round_index=round_index,
                     base_directive=base_directive,
-                    transcript_tail=transcript[-3:],
+                    transcript_tail=self._truncate_transcript(transcript)[-3:],
                     mode=mode,
                 )
                 turn_result = ag.generate_reasoning_tree(prompt)
@@ -1306,7 +1307,7 @@ class DuetMindAgent:
                     topic=topic,
                     round_index=round_index,
                     base_directive=base_directive,
-                    transcript_tail=transcript[-3:],
+                    transcript_tail=self._truncate_transcript(transcript)[-3:],
                     mode=mode,
                 )
                 turn_result = await ag.async_generate_reasoning_tree(
@@ -1548,6 +1549,87 @@ class DuetMindAgent:
     def _tokenize(text: str) -> List[str]:
         return [t for t in re.findall(r"[A-Za-z0-9]+", text.lower()) if len(t) > 2]
 
+    @staticmethod
+    def _count_tokens(text: str) -> int:
+        """
+        Simple token counting based on whitespace and punctuation splitting.
+        This approximates OpenAI-style tokenization for budget management.
+        """
+        if not text:
+            return 0
+        # Simple approximation: split on whitespace and punctuation
+        tokens = re.findall(r'\w+|[^\w\s]', text)
+        return len(tokens)
+
+    def _truncate_transcript(self, transcript: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Truncate transcript based on memory_guard configuration to stay within token budget.
+        
+        Args:
+            transcript: List of dialogue turns
+            
+        Returns:
+            Truncated transcript
+        """
+        memory_config = self.dialogue_config.get("memory_guard", {})
+        max_tokens = memory_config.get("max_transcript_tokens", 5000)
+        truncate_strategy = memory_config.get("truncate_strategy", "head")
+        
+        if not transcript:
+            return transcript
+            
+        # Calculate current token count
+        current_tokens = 0
+        for turn in transcript:
+            content = turn.get("content", "")
+            prompt = turn.get("prompt", "")
+            current_tokens += self._count_tokens(content) + self._count_tokens(prompt)
+        
+        if current_tokens <= max_tokens:
+            return transcript
+            
+        logger.info(f"Transcript has {current_tokens} tokens, truncating to {max_tokens} using {truncate_strategy} strategy")
+        
+        if truncate_strategy == "head":
+            # Keep newer turns, remove older ones
+            truncated = []
+            remaining_tokens = max_tokens
+            
+            for turn in reversed(transcript):
+                content = turn.get("content", "")
+                prompt = turn.get("prompt", "")
+                turn_tokens = self._count_tokens(content) + self._count_tokens(prompt)
+                
+                if turn_tokens <= remaining_tokens:
+                    truncated.insert(0, turn)
+                    remaining_tokens -= turn_tokens
+                else:
+                    break
+                    
+            return truncated
+            
+        elif truncate_strategy == "tail":
+            # Keep older turns, remove newer ones
+            truncated = []
+            remaining_tokens = max_tokens
+            
+            for turn in transcript:
+                content = turn.get("content", "")
+                prompt = turn.get("prompt", "")
+                turn_tokens = self._count_tokens(content) + self._count_tokens(prompt)
+                
+                if turn_tokens <= remaining_tokens:
+                    truncated.append(turn)
+                    remaining_tokens -= turn_tokens
+                else:
+                    break
+                    
+            return truncated
+            
+        else:
+            # Default to head strategy
+            return self._truncate_transcript(transcript)
+
     def _dialogue_metrics(self, transcript: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not transcript:
             return {"rounds": 0, "avg_confidence": 0.0, "turns_per_agent": {}, "lexical_diversity": 0.0, "total_turns": 0}
@@ -1580,6 +1662,40 @@ class DuetMindAgent:
         }
         Path(path).write_text(json.dumps(state, indent=2))
         logger.info(f"Agent state saved to {path}")
+
+    def persist_session(self, session_record: dict, directory: str = "sessions") -> str:
+        """
+        Persists a dialogue session record to a JSON file in the specified directory.
+        
+        Args:
+            session_record: Dictionary containing session data (from multi_party_dialogue)
+            directory: Directory path where to save session logs (default: "sessions")
+            
+        Returns:
+            str: Full path to the saved session file
+        """
+        sessions_dir = Path(directory)
+        sessions_dir.mkdir(exist_ok=True)
+        
+        session_id = session_record.get("session_id", f"session_{int(time.time()*1000)}")
+        timestamp = session_record.get("timestamp", time.time())
+        
+        # Create filename with timestamp for easy sorting
+        filename = f"{session_id}_{int(timestamp)}.json"
+        filepath = sessions_dir / filename
+        
+        # Add metadata about persistence
+        session_copy = dict(session_record)
+        session_copy["persistence_metadata"] = {
+            "saved_at": time.time(),
+            "saved_by_agent": self.name,
+            "filepath": str(filepath)
+        }
+        
+        filepath.write_text(json.dumps(session_copy, indent=2))
+        logger.info(f"Session '{session_id}' persisted to {filepath}")
+        
+        return str(filepath)
 
     @classmethod
     def load_state(
@@ -1658,7 +1774,7 @@ def _write_demo_files(tmpdir: Path) -> Dict[str, Path]:
                     "type": "rcd_policy",
                     "severity": "severe",
                     "description": "Policy rules check on final outcome",
-                    "params": {"rules_file": "rules.json"}
+                    "params": {"rules_file": str((tmpdir / "rules.json").resolve())}
                 },
                 {
                     "name": "keyword_guard",
@@ -1703,14 +1819,14 @@ dialogue_config:
 """.strip()
     )
     monitors_yaml.write_text(
-        """
+        f"""
 monitors:
   - name: policy_rcd
     type: rcd_policy
     severity: severe
     description: Policy rules check on final outcome
     params:
-      rules_file: rules.yaml
+      rules_file: {rules_yaml.resolve()}
   - name: keyword_guard
     type: keyword
     severity: severe
@@ -1749,7 +1865,7 @@ rules:
     return {"agent": agent_yaml}
 
 
-def _demo_sync() -> None:
+def _demo_sync(rounds: int = 3, skip_multiparty: bool = False, log_dir: str = "./sessions") -> None:
     tmpdir = Path("./_duetmind_demo_sync")
     tmpdir.mkdir(exist_ok=True)
     files = _write_demo_files(tmpdir)
@@ -1760,15 +1876,20 @@ def _demo_sync() -> None:
     print("\n--- SYNC SAFE RUN ---")
     out = agent.generate_reasoning_tree("Intro: collaborative planning", include_monitor_trace=True)
     print(json.dumps(out, indent=2))
+    
+    if not skip_multiparty:
+        print(f"\n--- SYNC MULTI-PARTY (brainstorm, {rounds} rounds) ---")
+        agent_b = DuetMindAgent("Apollo", {"logic": 0.7, "creativity": 0.85, "analytical": 0.5}, engine=engine, monitors=agent.monitors)
+        agent_c = DuetMindAgent("Hermes", {"logic": 0.55, "creativity": 0.9, "analytical": 0.6}, engine=engine, monitors=agent.monitors)
+        session = agent.brainstorm([agent, agent_b, agent_c], "Designing resilient edge network", rounds=rounds)
+        print(f"Converged: {session['converged']} | Final topic: {session['topic_final']}")
+        
+        # Persist the session
+        saved_path = agent.persist_session(session, log_dir)
+        print(f"Session saved to: {saved_path}")
 
-    print("\n--- SYNC MULTI-PARTY (brainstorm) ---")
-    agent_b = DuetMindAgent("Apollo", {"logic": 0.7, "creativity": 0.85, "analytical": 0.5}, engine=engine, monitors=agent.monitors)
-    agent_c = DuetMindAgent("Hermes", {"logic": 0.55, "creativity": 0.9, "analytical": 0.6}, engine=engine, monitors=agent.monitors)
-    session = agent.brainstorm([agent, agent_b, agent_c], "Designing resilient edge network", rounds=3)
-    print(f"Converged: {session['converged']} | Final topic: {session['topic_final']}")
 
-
-async def _demo_async() -> None:
+async def _demo_async(rounds: int = 4, parallel: bool = False, skip_multiparty: bool = False, log_dir: str = "./sessions") -> None:
     tmpdir = Path("./_duetmind_demo_async")
     tmpdir.mkdir(exist_ok=True)
     files = _write_demo_files(tmpdir)
@@ -1780,23 +1901,93 @@ async def _demo_async() -> None:
     out = await agent.async_generate_reasoning_tree("Async: strategic planning iteration", include_monitor_trace=True)
     print(json.dumps(out, indent=2))
 
-    print("\n--- ASYNC MULTI-PARTY (parallel debate) ---")
-    agent_b = DuetMindAgent("ApolloAsync", {"logic": 0.8, "creativity": 0.6, "analytical": 0.55}, engine=engine, monitors=agent.monitors)
-    agent_c = DuetMindAgent("HermesAsync", {"logic": 0.5, "creativity": 0.9, "analytical": 0.6}, engine=engine, monitors=agent.monitors)
+    if not skip_multiparty:
+        print(f"\n--- ASYNC MULTI-PARTY ({'parallel' if parallel else 'sequential'} debate, {rounds} rounds) ---")
+        agent_b = DuetMindAgent("ApolloAsync", {"logic": 0.8, "creativity": 0.6, "analytical": 0.55}, engine=engine, monitors=agent.monitors)
+        agent_c = DuetMindAgent("HermesAsync", {"logic": 0.5, "creativity": 0.9, "analytical": 0.6}, engine=engine, monitors=agent.monitors)
 
-    session = await agent.async_debate(
-        [agent, agent_b, agent_c],
-        "Ethical frameworks for autonomous swarms",
-        rounds=4,
-        parallel_round=True
+        session = await agent.async_debate(
+            [agent, agent_b, agent_c],
+            "Ethical frameworks for autonomous swarms",
+            rounds=rounds,
+            parallel_round=parallel
+        )
+        print(f"Async Converged: {session['converged']} | Rounds executed: {session['rounds_executed']}")
+        
+        # Persist the session
+        saved_path = agent.persist_session(session, log_dir)
+        print(f"Session saved to: {saved_path}")
+
+
+def _demo_both(rounds: int = 3, parallel: bool = False, skip_multiparty: bool = False, log_dir: str = "./sessions") -> None:
+    """Run both sync and async demos"""
+    _demo_sync(rounds, skip_multiparty, log_dir)
+    asyncio.run(_demo_async(rounds, parallel, skip_multiparty, log_dir))
+
+
+def main() -> None:
+    """Main entry point with CLI argument support"""
+    parser = argparse.ArgumentParser(
+        description="DuetMindAgent - Multi-agent dialogue system with advanced reasoning",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    print(f"Async Converged: {session['converged']} | Rounds executed: {session['rounds_executed']}")
+    
+    parser.add_argument(
+        "--demo",
+        choices=["sync", "async", "both"],
+        default="both",
+        help="Which demo to run"
+    )
+    
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=3,
+        help="Number of rounds for multi-party examples"
+    )
+    
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Enable parallel_round=True in async multi-party demo"
+    )
+    
+    parser.add_argument(
+        "--no-multiparty",
+        action="store_true",
+        help="Skip multi-party portion, run only single reasoning tree demo"
+    )
+    
+    parser.add_argument(
+        "--log-dir",
+        default="./sessions",
+        help="Directory in which to persist session logs"
+    )
+    
+    args = parser.parse_args()
+    
+    # Ensure log directory exists
+    Path(args.log_dir).mkdir(exist_ok=True)
+    
+    try:
+        if args.demo == "sync":
+            _demo_sync(args.rounds, args.no_multiparty, args.log_dir)
+        elif args.demo == "async":
+            asyncio.run(_demo_async(args.rounds, args.parallel, args.no_multiparty, args.log_dir))
+        else:  # both
+            _demo_both(args.rounds, args.parallel, args.no_multiparty, args.log_dir)
+    except KeyboardInterrupt:
+        print("\nDemo interrupted by user")
+    except Exception as e:
+        logger.error(f"Demo failed: {e}")
+        raise
 
 
+# Backward compatibility: maintain old _demo function
 def _demo() -> None:
-    _demo_sync()
-    asyncio.run(_demo_async())
+    """Legacy demo function for backward compatibility"""
+    _demo_both()
 
 
 if __name__ == "__main__":
-    _demo()
+    main()
