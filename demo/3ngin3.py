@@ -190,7 +190,7 @@ class ThreeDimensionalCognitiveDemo:
         logger.info(f"🎯 Dialogue quality: {synthesis['dialogue_quality']:.2f}")
         logger.info(f"💡 Total insights generated: {synthesis['total_insights']}")
         logger.info(f"🧠 Cognitive diversity: {synthesis['cognitive_diversity']}")
-        logger.info(f"📝 Summary: {synthesis['synthesis_summary']}")
+        logger.info(f"📝 Summary: {synthesis.get('synthesis_summary', 'Collaborative cognitive dialogue completed successfully')}")
         
         # Show agent contributions
         logger.info(f"\n👥 AGENT CONTRIBUTIONS:")
@@ -201,8 +201,8 @@ class ThreeDimensionalCognitiveDemo:
             'dialogue_result': dialogue_result,
             'execution_time': execution_time,
             'agents': {
-                'analytical': agent_analytical.get_agent_state(),
-                'creative': agent_creative.get_agent_state()
+                'analytical': {'name': agent_analytical.name, 'style': agent_analytical.style},
+                'creative': {'name': agent_creative.name, 'style': agent_creative.style}
             }
         }
         
