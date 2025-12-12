@@ -2,6 +2,8 @@ import logging
 import random
 import time
 import threading
+import numpy as np
+from typing import Dict, Any, List, Optional
 import math
 from typing import Dict, Any, List, Optional, Callable
 
@@ -561,6 +563,59 @@ class ThreeDimensionalHRO:
                     best, best_e = current.copy(), current_e
             temperature *= cooling_rate
             iteration += 1
+        out = {"strategy": "complex", "algorithm": "simulated_annealing", "iterations": iteration, "best_energy": best_e}
+        with self._opt_lock:
+            self.optimization_history.append(out)
+        return out
+    
+    def _adaptive_optimization(self, problem_space: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Adaptive optimization strategy that selects the best approach based on problem complexity."""
+        dimensions = int(problem_space.get("dimensions", 5))
+        
+        # Use simple optimization for small problems, complex for larger ones
+        if dimensions <= 3:
+            return self._simple_optimization(problem_space, **kwargs)
+        else:
+            return self._complex_optimization(problem_space, **kwargs)
+    
+    def _qubo_energy(self, solution, problem_space):
+        """Calculate QUBO energy for a given solution."""
+        # Simple energy function for demonstration
+        return sum(x * (i + 1) for i, x in enumerate(solution))
+    
+    def _acceptance_probability(self, current_energy, new_energy, temperature):
+        """Calculate acceptance probability for simulated annealing."""
+        if new_energy < current_energy:
+            return 1.0
+        return np.exp(-(new_energy - current_energy) / temperature) if temperature > 0 else 0.0
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get the current status of the 3NGIN3 engine."""
+        return {
+            "position": f"({self.x_axis}, {self.y_axis}, {self.z_axis})",
+            "capabilities": {
+                "neural_available": self.neural_available,
+                "thread_safe": True,
+                "safety_monitoring": self.rcd is not None
+            },
+            "state": self.state.as_dict(),
+            "microbiome_health": getattr(self, "microbiome_state", None),
+            "rcd_status": {
+                "sensitivity_threshold": 0.5,
+                "constraints_active": self.rcd is not None
+            } if self.rcd is not None else None
+        }
+    
+    def move_to_coordinates(self, x: str = None, y: str = None, z: str = None):
+        """Move the engine to new coordinates in the 3D space."""
+        if x is not None:
+            self.x_axis = x
+        if y is not None:
+            self.y_axis = y
+        if z is not None:
+            self.z_axis = z
+        
+        logger.info(f"Engine moved to ({self.x_axis}, {self.y_axis}, {self.z_axis})")
         out = {"strategy": "complex", "algorithm": "simulated_annealing", "iterations": iteration, 
                "best_solution": {"parameters": best, "energy": best_e}, "final_temperature": temperature}
         with self._opt_lock:
