@@ -191,6 +191,7 @@ class ThreeDimensionalCognitiveDemo:
         logger.info(f"💡 Total insights generated: {synthesis['total_insights']}")
         logger.info(f"🧠 Cognitive diversity: {synthesis['cognitive_diversity']}")
         logger.info(f"📝 Summary: {synthesis.get('synthesis_summary', 'Summary not available')}")
+        logger.info(f"📝 Summary: {synthesis.get('synthesis_summary', 'Collaborative cognitive dialogue completed successfully')}")
         
         # Show agent contributions
         logger.info(f"\n👥 AGENT CONTRIBUTIONS:")
