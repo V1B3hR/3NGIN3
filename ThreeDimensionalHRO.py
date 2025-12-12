@@ -4,6 +4,8 @@ import time
 import threading
 import numpy as np
 from typing import Dict, Any, List, Optional
+import math
+from typing import Dict, Any, List, Optional, Callable
 
 # --- Logging setup ---
 logger = logging.getLogger(__name__)
@@ -17,6 +19,63 @@ try:
 except Exception:
     torch = None
     _TORCH_AVAILABLE = False
+
+# --- Registry system for cognitive components ---
+image_encoders = {}
+cognitive_engines = {}
+microbiome_species_registry = {}
+
+def register_image_encoder(fn: Callable) -> Callable:
+    module_name_split = fn.__module__.split('.')
+    model_name = module_name_split[-1]
+    image_encoders[model_name] = fn
+    return fn
+
+def register_cognitive_engine(name: str = None):
+    def decorator(cls_or_fn: Callable) -> Callable:
+        engine_name = name or cls_or_fn.__name__.lower()
+        cognitive_engines[engine_name] = cls_or_fn
+        return cls_or_fn
+    return decorator
+
+def register_microbiome_species(species_class: Callable) -> Callable:
+    species_name = species_class.__name__.lower()
+    microbiome_species_registry[species_name] = species_class
+    return species_class
+
+def get_image_encoder(model_name: str) -> Callable:
+    if model_name not in image_encoders:
+        raise ValueError(f'Unknown image encoder: {model_name}')
+    return image_encoders[model_name]
+
+def get_cognitive_engine(engine_name: str) -> Callable:
+    if engine_name not in cognitive_engines:
+        raise ValueError(f'Unknown cognitive engine: {engine_name}')
+    return cognitive_engines[engine_name]
+
+def get_microbiome_species(species_name: str) -> Callable:
+    if species_name not in microbiome_species_registry:
+        raise ValueError(f'Unknown microbiome species: {species_name}')
+    return microbiome_species_registry[species_name]
+
+def is_image_encoder(model_name: str) -> bool:
+    return model_name in image_encoders
+
+def is_cognitive_engine(engine_name: str) -> bool:
+    return engine_name in cognitive_engines
+
+def build_image_encoder(config_encoder: Dict[str, Any], verbose: bool = False, **kwargs) -> Any:
+    model_name = config_encoder['NAME']
+    if model_name.startswith('cls_'):
+        model_name = model_name[4:]
+    if not is_image_encoder(model_name):
+        raise ValueError(f'Unknown model: {model_name}')
+    return image_encoders[model_name](config_encoder, verbose, **kwargs)
+
+def build_cognitive_engine(engine_name: str, **kwargs) -> Any:
+    if not is_cognitive_engine(engine_name):
+        raise ValueError(f'Unknown cognitive engine: {engine_name}')
+    return cognitive_engines[engine_name](**kwargs)
 
 # --- Thread-safe system state for cognitive engine ---
 class SystemState:
@@ -72,7 +131,7 @@ class SystemState:
         with self._lock:
             return dict(self._state)
 
-# --- Gut-brain system state ---
+# --- Thread-safe gut-brain system state ---
 class MicrobiomeSystemState:
     def __init__(self):
         self.anxiety = 0
@@ -80,26 +139,34 @@ class MicrobiomeSystemState:
         self.memory = 0
         self.cyber_defense = 5
         self.health_score = 100
+        self._lock = threading.RLock()
 
     def absorb_overload(self, amount):
-        self.overload = max(0, self.overload - amount)
+        with self._lock:
+            self.overload = max(0, self.overload - amount)
 
     def boost_memory(self, amount):
-        self.memory += amount
+        with self._lock:
+            self.memory += amount
 
     def trigger_anxiety(self, amount):
-        self.anxiety += amount
+        with self._lock:
+            self.anxiety += amount
 
     def defend(self, attack_strength):
-        if self.cyber_defense >= attack_strength:
-            print("Defended against attack!")
-        else:
-            print("Attack penetrated defenses!")
+        with self._lock:
+            if self.cyber_defense >= attack_strength:
+                print("Defended against attack!")
+                return True
+            else:
+                print("Attack penetrated defenses!")
+                return False
 
     def update_health(self, delta):
-        self.health_score = max(0, min(100, self.health_score + delta))
+        with self._lock:
+            self.health_score = max(0, min(100, self.health_score + delta))
 
-# --- Microbiome species ---
+# --- Base microbiome species class ---
 class MicrobiomeSpecies:
     def __init__(self, name, role, effect, is_bad=False, abundance=1):
         self.name = name
@@ -112,19 +179,61 @@ class MicrobiomeSpecies:
         for _ in range(self.abundance):
             self.effect(system)
 
-# --- Neuron loop (simulated) ---
+@register_microbiome_species
+class Lactobacillus(MicrobiomeSpecies):
+    def __init__(self, abundance=2):
+        super().__init__(
+            name="Lactobacillus", 
+            role="anxiety_reducer",
+            effect=lambda sys: sys.absorb_overload(2), 
+            abundance=abundance
+        )
+
+@register_microbiome_species
+class Bifidobacterium(MicrobiomeSpecies):
+    def __init__(self, abundance=2):
+        super().__init__(
+            name="Bifidobacterium", 
+            role="memory_helper",
+            effect=lambda sys: sys.boost_memory(1), 
+            abundance=abundance
+        )
+
+@register_microbiome_species
+class Pathogenus(MicrobiomeSpecies):
+    def __init__(self, abundance=1):
+        super().__init__(
+            name="Pathogenus", 
+            role="anxiety_trigger",
+            effect=lambda sys: sys.trigger_anxiety(3), 
+            is_bad=True, 
+            abundance=abundance
+        )
+
 class NeuronLoop:
     def __init__(self):
         self.activity = 0
         self.memory = 0
+        self._lock = threading.RLock()
 
     def stimulate(self, amount):
-        self.activity += amount
+        with self._lock:
+            self.activity += amount
+            self.memory += amount * 0.1
 
     def rest(self):
-        self.activity = max(0, self.activity - 1)
+        with self._lock:
+            self.activity = max(0, self.activity - 1)
+            self.memory = max(0, self.memory - 0.05)
 
-# --- Vagus nerve: gut-brain bridge ---
+    def get_memory(self):
+        with self._lock:
+            return self.memory
+
+    def get_activity(self):
+        with self._lock:
+            return self.activity
+
 class VagusNerve:
     def __init__(self, gut_state: MicrobiomeSystemState, cognitive_state: SystemState):
         self.gut_state = gut_state
@@ -132,17 +241,18 @@ class VagusNerve:
 
     def transmit_signals(self):
         try:
-            # Relay gut state to cognitive state
             self.cognitive_state.update("anxiety_level", self.gut_state.anxiety)
             self.cognitive_state.update("overload_level", self.gut_state.overload)
             self.cognitive_state.update("memory_score", self.gut_state.memory)
             self.cognitive_state.update("cyber_defense", self.gut_state.cyber_defense)
             self.cognitive_state.update("microbiome_health", self.gut_state.health_score)
-            logging.info("[VagusNerve] Signals transmitted from gut to brain.")
+            logger.info("[VagusNerve] Signals transmitted from gut to brain.")
+            return True
         except Exception as e:
-            logging.error(f"[VagusNerve] Transmission error: {e}")
+            logger.error(f"[VagusNerve] Transmission error: {e}")
+            return False
 
-# --- ThreeDimensionalHRO cognitive engine ---
+@register_cognitive_engine("threedimensionalhro")
 class ThreeDimensionalHRO:
     def __init__(
         self,
@@ -164,27 +274,19 @@ class ThreeDimensionalHRO:
         self._cache_lock = threading.RLock()
         self.optimization_history: List[Dict[str, Any]] = []
         self._opt_lock = threading.RLock()
-
-        # Gut-brain system
         self.microbiome_state = MicrobiomeSystemState()
         self.neurons = [NeuronLoop() for _ in range(10)]
         self.species_capacity = species_capacity
         self.microbiome = self._init_microbiome_species()
         self.vagus_nerve = VagusNerve(self.microbiome_state, self.state)
-
         logger.info(f"3NGIN3 initialized at ({self.x_axis}, {self.y_axis}, {self.z_axis}), neural={self.neural_available}")
 
-    # --- Microbiome species & population dynamics ---
     def _init_microbiome_species(self):
-        helpers = [
-            MicrobiomeSpecies(
-                name="Lactobacillus", role="anxiety_reducer",
-                effect=lambda sys: sys.absorb_overload(2), abundance=2
-            ),
-            MicrobiomeSpecies(
-                name="Bifidobacterium", role="memory_helper",
-                effect=lambda sys: sys.boost_memory(1), abundance=2
-            ),
+        species_list = []
+        species_list.append(get_microbiome_species("lactobacillus")(abundance=2))
+        species_list.append(get_microbiome_species("bifidobacterium")(abundance=2))
+        species_list.append(get_microbiome_species("pathogenus")(abundance=1))
+        species_list.extend([
             MicrobiomeSpecies(
                 name="DopamineActivator", role="activity_boost",
                 effect=lambda sys: [n.stimulate(2) for n in self.neurons], abundance=1
@@ -197,12 +299,6 @@ class ThreeDimensionalHRO:
                 name="Faecalibacterium", role="anti_inflammatory",
                 effect=lambda sys: sys.absorb_overload(1), abundance=1
             ),
-        ]
-        attackers = [
-            MicrobiomeSpecies(
-                name="Pathogenus", role="anxiety_trigger",
-                effect=lambda sys: sys.trigger_anxiety(3), is_bad=True, abundance=1
-            ),
             MicrobiomeSpecies(
                 name="Clostridium_difficile", role="memory_disruptor",
                 effect=lambda sys: setattr(sys, 'memory', max(0, sys.memory - 2)), is_bad=True, abundance=1
@@ -211,16 +307,14 @@ class ThreeDimensionalHRO:
                 name="E_coli_pathogenic", role="defense_weakener",
                 effect=lambda sys: setattr(sys, 'cyber_defense', max(1, sys.cyber_defense - 1)), is_bad=True, abundance=1
             ),
-        ]
-        species = helpers + attackers
-        if len(species) > self.species_capacity:
-            species = random.sample(species, self.species_capacity)
-        return species
+        ])
+        if len(species_list) > self.species_capacity:
+            species_list = random.sample(species_list, self.species_capacity)
+        return species_list
 
     def update_population_dynamics(self):
         beneficial = [s for s in self.microbiome if not s.is_bad]
         pathogenic = [s for s in self.microbiome if s.is_bad]
-        # Competition
         if len(pathogenic) > len(beneficial):
             for b in beneficial:
                 b.abundance = max(1, b.abundance - 1)
@@ -229,7 +323,6 @@ class ThreeDimensionalHRO:
             for p in pathogenic:
                 p.abundance = max(1, p.abundance - 1)
             self.microbiome_state.update_health(+5)
-        # Symbiosis
         names = [s.name for s in beneficial]
         if "Akkermansia" in names and "Faecalibacterium" in names:
             for s in beneficial:
@@ -237,10 +330,9 @@ class ThreeDimensionalHRO:
                     s.abundance += 1
 
     def integrate_training_data(self, dataset):
-        # Placeholder: dataset should be a dict {species_name: abundance}
         for s in self.microbiome:
             if s.name in dataset:
-                s.abundance = dataset[s.name]
+                s.abundance = max(1, dataset[s.name])
 
     def check_microbiome_safety(self):
         health = self.microbiome_state.health_score
@@ -258,7 +350,6 @@ class ThreeDimensionalHRO:
                     s.abundance = max(1, s.abundance - 1)
             self.microbiome_state.update_health(+10)
 
-    # --- Gut-brain simulation cycle ---
     def simulate_microbiome_phase(self, phase: str, dataset=None):
         print(f"\n--- Gut-Brain Phase: {phase} ---")
         try:
@@ -273,32 +364,37 @@ class ThreeDimensionalHRO:
                     n.stimulate(random.randint(1, 3))
                 elif phase == "rest":
                     n.rest()
-                self.microbiome_state.memory += n.memory
-            # Gut-brain signal relay
+                self.microbiome_state.memory += n.get_memory()
             self.vagus_nerve.transmit_signals()
             print(f"Anxiety (gut): {self.microbiome_state.anxiety}, Overload (gut): {self.microbiome_state.overload}, Memory (gut): {self.microbiome_state.memory}, Cyber Defense (gut): {self.microbiome_state.cyber_defense}, Health: {self.microbiome_state.health_score}")
-            print(f"Cognitive State | anxiety_level: {self.state.get('anxiety_level')}, overload_level: {self.state.get('overload_level')}, memory_score: {self.state.get('memory_score')}, cyber_defense: {self.state.get('cyber_defense')}, microbiome_health: {self.state.get('microbiome_health')}")
+            print(f"Cognitive State | anxiety_level: {self.state.get('anxiety_level')}, overload_level: {self.state.get('overload_level')}, memory_score: {self.state.get('memory_score')}, cyber_defense: {self.state.get('cyber_defense')}")
+            return True
         except Exception as e:
-            logging.error(f"[MicrobiomePhase] Error during phase '{phase}': {e}")
+            logger.error(f"[MicrobiomePhase] Error during phase '{phase}': {e}")
+            return False
 
-    # --- Diagnostics and test methods ---
     def run_diagnostics(self):
         try:
             print("\n[Diagnostics]")
-            print("Gut anxiety:", self.microbiome_state.anxiety)
-            print("Cognitive anxiety:", self.state.get("anxiety_level"))
-            print("Gut overload:", self.microbiome_state.overload)
-            print("Cognitive overload:", self.state.get("overload_level"))
-            print("Gut memory:", self.microbiome_state.memory)
-            print("Cognitive memory:", self.state.get("memory_score"))
-            print("Gut cyber defense:", self.microbiome_state.cyber_defense)
-            print("Cognitive cyber defense:", self.state.get("cyber_defense"))
-            print("Microbiome health score:", self.microbiome_state.health_score)
-            print("Cognitive microbiome health:", self.state.get("microbiome_health"))
+            print(f"Gut anxiety: {self.microbiome_state.anxiety}")
+            print(f"Cognitive anxiety: {self.state.get('anxiety_level')}")
+            print(f"Gut overload: {self.microbiome_state.overload}")
+            print(f"Cognitive overload: {self.state.get('overload_level')}")
+            print(f"Gut memory: {self.microbiome_state.memory}")
+            print(f"Cognitive memory: {self.state.get('memory_score')}")
+            print(f"Gut cyber defense: {self.microbiome_state.cyber_defense}")
+            print(f"Cognitive cyber defense: {self.state.get('cyber_defense')}")
+            print(f"Microbiome health score: {self.microbiome_state.health_score}")
+            print(f"Cognitive microbiome health: {self.state.get('microbiome_health')}")
+            total_neuron_activity = sum(n.get_activity() for n in self.neurons)
+            total_neuron_memory = sum(n.get_memory() for n in self.neurons)
+            print(f"Total neuron activity: {total_neuron_activity}")
+            print(f"Total neuron memory: {total_neuron_memory}")
+            return True
         except Exception as e:
-            logging.error(f"[Diagnostics] Error: {e}")
+            logger.error(f"[Diagnostics] Error: {e}")
+            return False
 
-    # --- Cognitive engine logic ---
     def think(self, content: str, **kwargs) -> Dict[str, Any]:
         if self.x_axis == "sequential":
             return self._sequential_reasoning(content, **kwargs)
@@ -520,3 +616,58 @@ class ThreeDimensionalHRO:
             self.z_axis = z
         
         logger.info(f"Engine moved to ({self.x_axis}, {self.y_axis}, {self.z_axis})")
+        out = {"strategy": "complex", "algorithm": "simulated_annealing", "iterations": iteration, 
+               "best_solution": {"parameters": best, "energy": best_e}, "final_temperature": temperature}
+        with self._opt_lock:
+            self.optimization_history.append(out)
+        return out
+
+    def _adaptive_optimization(self, problem_space: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        complexity = problem_space.get("complexity", "medium")
+        if complexity == "low" or problem_space.get("dimensions", 3) < 5:
+            return self._simple_optimization(problem_space, **kwargs)
+        else:
+            return self._complex_optimization(problem_space, **kwargs)
+
+    def _qubo_energy(self, solution: List[int], problem_space: Dict[str, Any]) -> float:
+        n = len(solution)
+        energy = 0.0
+        for i in range(n):
+            for j in range(i+1, n):
+                weight = problem_space.get("weights", {}).get(f"{i}_{j}", random.random())
+                energy += weight * solution[i] * solution[j]
+        return energy
+
+    def _acceptance_probability(self, current_energy: float, new_energy: float, temperature: float) -> float:
+        if temperature <= 0:
+            return 0.0
+        try:
+            return min(1.0, math.exp((current_energy - new_energy) / temperature))
+        except OverflowError:
+            return 1.0 if current_energy > new_energy else 0.0
+
+def create_default_cognitive_system(**kwargs):
+    return build_cognitive_engine("threedimensionalhro", **kwargs)
+
+def list_registered_components():
+    return {
+        "image_encoders": list(image_encoders.keys()),
+        "cognitive_engines": list(cognitive_engines.keys()),
+        "microbiome_species": list(microbiome_species_registry.keys())
+    }
+
+@register_image_encoder
+def custom_vision_encoder(config_encoder, verbose=False, **kwargs):
+    logger.info(f"Creating custom vision encoder with config: {config_encoder}")
+    return {"type": "custom_vision", "config": config_encoder}
+
+if __name__ == "__main__":
+    print("Available components:", list_registered_components())
+    engine = create_default_cognitive_system(
+        reasoning_mode="hybrid",
+        optimization_strategy="adaptive"
+    )
+    engine.simulate_microbiome_phase("busy")
+    result = engine.safe_think("test_agent", "This is a test of the cognitive system.")
+    print("Thinking result:", result)
+    engine.run_diagnostics()
