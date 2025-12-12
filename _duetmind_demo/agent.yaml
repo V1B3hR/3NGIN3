@@ -1,0 +1,7 @@
+name: Athena
+style:
+  logic: 0.9
+  creativity: 0.4
+  analytical: 0.8
+monitors:
+  file: monitors.yaml
